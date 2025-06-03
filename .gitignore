@@ -1,0 +1,6 @@
+/target
+/usls
+/runs/
+/video/
+/runs/*.mov
+.DS_Store

@@ -1,0 +1,10 @@
+[package]
+name = "land2port"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = { version = "1" }
+argh = "0.1.13"
+usls = { git = "https://github.com/jamjamjon/usls", features=["video", "mps"] }
+image = "0.25"
