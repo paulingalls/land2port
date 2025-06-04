@@ -1,4 +1,4 @@
-use crate::crop::{CropArea, CropResult};
+use crate::crop::CropResult;
 use anyhow::Result;
 use image::{RgbImage, imageops::resize};
 use usls::Image;
@@ -123,6 +123,7 @@ pub fn create_cropped_image(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crop::CropArea;
     use usls::Image;
 
     #[test]
@@ -165,7 +166,6 @@ mod tests {
                 assert_eq!(pixel[2], 0); // B
             }
         }
-
     }
 
     #[test]
