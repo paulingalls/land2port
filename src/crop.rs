@@ -19,11 +19,12 @@ impl CropArea {
     /// 
     /// # Arguments
     /// * `other` - The other crop area to compare against
+    /// * `frame_width` - The width of the frame
     /// * `threshold_percent` - The maximum allowed difference as a percentage (e.g. 5.0 for 5%)
     /// 
     /// # Returns
-    /// `true` if all dimensions (x, y, width, height) are within the threshold percentage of each other
-    pub fn is_within_percentage(&self, other: &CropArea, threshold_percent: f32) -> bool {
+    /// `true` if the x and width are within the threshold percentage of each other
+    pub fn is_within_percentage(&self, other: &CropArea, frame_width: f32, threshold_percent: f32) -> bool {
         let threshold = threshold_percent / 100.0;
         
         // Helper function to check if two values are within threshold percentage of each other
@@ -34,17 +35,14 @@ impl CropArea {
                 false
             } else {
                 let diff = (a - b).abs();
-                let max = a.max(b);
-                let percent = diff / max;
+                let percent = diff / frame_width;
                 percent <= threshold + f32::EPSILON
             }
         };
 
         let x_ok = is_within_threshold("x", self.x, other.x);
-        let y_ok = is_within_threshold("y", self.y, other.y);
         let w_ok = is_within_threshold("width", self.width, other.width);
-        let h_ok = is_within_threshold("height", self.height, other.height);
-        x_ok && y_ok && w_ok && h_ok
+        x_ok && w_ok
     }
 }
 
@@ -1062,57 +1060,50 @@ mod tests {
 
     #[test]
     fn test_is_within_percentage() {
+        let frame_width = 1920.0; // Standard HD width for testing
+        let threshold = 5.0; // 5% threshold
+        let max_diff = frame_width * (threshold / 100.0); // Maximum allowed difference
+
         // Test identical values
         let crop1 = CropArea::new(100.0, 100.0, 200.0, 200.0);
         let crop2 = CropArea::new(100.0, 100.0, 200.0, 200.0);
-        assert!(crop1.is_within_percentage(&crop2, 5.0));
+        assert!(crop1.is_within_percentage(&crop2, frame_width, threshold));
 
-        // Test values within 5%
+        // Test small difference (well within threshold)
         let crop1 = CropArea::new(100.0, 100.0, 200.0, 200.0);
-        let crop2 = CropArea::new(102.0, 98.0, 204.0, 196.0); // All values within 2%
-        assert!(crop1.is_within_percentage(&crop2, 5.0));
+        let crop2 = CropArea::new(150.0, 100.0, 250.0, 200.0); // 50px difference, well under max_diff
+        assert!(crop1.is_within_percentage(&crop2, frame_width, threshold));
 
-        // Test values exactly at 5% threshold
+        // Test difference exactly at threshold
         let crop1 = CropArea::new(100.0, 100.0, 200.0, 200.0);
-        let crop2 = CropArea::new(104.99, 95.01, 209.99, 190.01); // All values just under 5%
-        assert!(crop1.is_within_percentage(&crop2, 5.0));
+        let crop2 = CropArea::new(100.0 + max_diff, 100.0, 200.0 + max_diff, 200.0);
+        assert!(crop1.is_within_percentage(&crop2, frame_width, threshold));
 
-        // Test values just over 5%
+        // Test difference just over threshold
         let crop1 = CropArea::new(100.0, 100.0, 200.0, 200.0);
-        let crop2 = CropArea::new(106.0, 94.0, 211.0, 189.0); // All values just over 5%
-        assert!(!crop1.is_within_percentage(&crop2, 5.0));
+        let crop2 = CropArea::new(100.0 + max_diff + 1.0, 100.0, 200.0 + max_diff + 1.0, 200.0);
+        assert!(!crop1.is_within_percentage(&crop2, frame_width, threshold));
 
         // Test with zero values
-        let crop1 = CropArea::new(0.0, 0.0, 200.0, 200.0);
-        let crop2 = CropArea::new(0.0, 0.0, 200.0, 200.0);
-        assert!(crop1.is_within_percentage(&crop2, 5.0));
+        let crop1 = CropArea::new(0.0, 0.0, 0.0, 0.0);
+        let crop2 = CropArea::new(0.0, 0.0, 0.0, 0.0);
+        assert!(crop1.is_within_percentage(&crop2, frame_width, threshold));
 
         // Test with one zero value
-        let crop1 = CropArea::new(0.0, 100.0, 200.0, 200.0);
-        let crop2 = CropArea::new(1.0, 100.0, 200.0, 200.0);
-        assert!(!crop1.is_within_percentage(&crop2, 5.0));
-
-        // Test with very small values
-        let crop1 = CropArea::new(1.0, 1.0, 1.0, 1.0);
-        let crop2 = CropArea::new(1.05, 0.95, 1.05, 0.95); // All values within 5%
-        assert!(crop1.is_within_percentage(&crop2, 5.0));
-
-        // Test with very large values
-        let crop1 = CropArea::new(1000.0, 1000.0, 2000.0, 2000.0);
-        let crop2 = CropArea::new(1050.0, 950.0, 2100.0, 1900.0); // All values within 5%
-        assert!(crop1.is_within_percentage(&crop2, 5.0));
+        let crop1 = CropArea::new(0.0, 0.0, 0.0, 0.0);
+        let crop2 = CropArea::new(1.0, 0.0, 1.0, 0.0);
+        assert!(!crop1.is_within_percentage(&crop2, frame_width, threshold));
 
         // Test with different threshold values
         let crop1 = CropArea::new(100.0, 100.0, 200.0, 200.0);
-        let crop2 = CropArea::new(110.0, 90.0, 220.0, 180.0); // All values at 10%
-        assert!(!crop1.is_within_percentage(&crop2, 5.0));
-        assert!(crop1.is_within_percentage(&crop2, 10.0));
-        assert!(crop1.is_within_percentage(&crop2, 15.0));
+        let crop2 = CropArea::new(200.0, 100.0, 300.0, 200.0); // 100px difference
+        assert!(!crop1.is_within_percentage(&crop2, frame_width, 5.0));  // Over 5%
+        assert!(crop1.is_within_percentage(&crop2, frame_width, 10.0));  // Under 10%
+        assert!(crop1.is_within_percentage(&crop2, frame_width, 15.0));  // Under 15%
 
         // Test with mixed differences
         let crop1 = CropArea::new(100.0, 100.0, 200.0, 200.0);
-        let crop2 = CropArea::new(102.0, 98.0, 210.0, 190.0); // x,y within 2%, width,height at 5%
-        assert!(crop1.is_within_percentage(&crop2, 5.0));
-        assert!(!crop1.is_within_percentage(&crop2, 4.0));
+        let crop2 = CropArea::new(150.0, 100.0, 300.0, 200.0); // x within threshold, width over threshold
+        assert!(!crop1.is_within_percentage(&crop2, frame_width, threshold));
     }
 } 

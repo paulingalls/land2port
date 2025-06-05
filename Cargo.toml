@@ -6,5 +6,8 @@ edition = "2024"
 [dependencies]
 anyhow = { version = "1" }
 argh = "0.1.13"
-usls = { git = "https://github.com/jamjamjon/usls", features=["video", "mps"] }
+usls = { git = "https://github.com/paulingalls/usls", features=["video", "coreml"] }
 image = "0.25"
+openai-api-rs = "6.0.6"
+tokio = { version = "1", features = ["full"] }
+chrono = "0.4.41"
