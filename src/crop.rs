@@ -185,8 +185,8 @@ pub fn calculate_two_heads_crop(frame_width: f32, frame_height: f32, head1: &Hbb
     }
 }
 
-/// Calculates crop area for three to five heads
-pub fn calculate_three_to_five_heads_crop(frame_width: f32, frame_height: f32, heads: &[&Hbb]) -> CropResult {
+/// Calculates crop area for three to four heads
+pub fn calculate_three_to_four_heads_crop(frame_width: f32, frame_height: f32, heads: &[&Hbb]) -> CropResult {
     // Calculate the bounding box that contains all heads
     let bbox = calculate_bounding_box(heads);
     
@@ -297,33 +297,6 @@ pub fn calculate_three_to_five_heads_crop(frame_width: f32, frame_height: f32, h
     }
 }
 
-/// Calculates crop area for more than five heads
-pub fn calculate_more_than_five_heads_crop(frame_width: f32, frame_height: f32, heads: &[&Hbb]) -> CropResult {
-    // Find the largest head by area
-    let largest_head = heads
-        .iter()
-        .max_by(|a, b| a.area().partial_cmp(&b.area()).unwrap())
-        .unwrap();
-    let head_center_x = largest_head.cx();
-    
-    // Set height to match frame height
-    let height = frame_height;
-    // Set width to 3/4 of the height (3:4 aspect ratio)
-    let width = height * (3.0 / 4.0);
-    
-    // Calculate initial x position centered on the largest head
-    let mut x = head_center_x - width / 2.0;
-    
-    // Clamp x to frame bounds
-    if x < 0.0 {
-        x = 0.0;  // Clamp to left edge
-    } else if x + width > frame_width {
-        x = frame_width - width;  // Clamp to right edge
-    }
-    
-    CropResult::Single(CropArea::new(x, 0.0, width, height))
-}
-
 /// Calculates the optimal crop area based on detected heads
 /// 
 /// # Arguments
@@ -356,8 +329,8 @@ pub fn calculate_crop_area(
         0 => Ok(calculate_no_heads_crop(frame_width, frame_height)),
         1 => Ok(calculate_single_head_crop(frame_width, frame_height, heads[0])),
         2 => Ok(calculate_two_heads_crop(frame_width, frame_height, heads[0], heads[1])),
-        3..=5 => Ok(calculate_three_to_five_heads_crop(frame_width, frame_height, &heads)),
-        _ => Ok(calculate_more_than_five_heads_crop(frame_width, frame_height, &heads)),
+        3..=4 => Ok(calculate_three_to_four_heads_crop(frame_width, frame_height, &heads)),
+        _ => Ok(calculate_no_heads_crop(frame_width, frame_height)),
     }
 }
 
@@ -734,7 +707,7 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_three_to_five_heads_crop_close() {
+    fn test_calculate_three_to_four_heads_crop_close() {
         let frame_width = 1920.0;
         let frame_height = 1080.0;
         
@@ -744,7 +717,7 @@ mod tests {
         let head3 = Hbb::from_cxcywh(frame_width/2.0 + 100.0, frame_height/2.0, 100.0, 100.0);
         let heads = vec![&head1, &head2, &head3];
         
-        let crop = calculate_three_to_five_heads_crop(frame_width, frame_height, &heads);
+        let crop = calculate_three_to_four_heads_crop(frame_width, frame_height, &heads);
         
         match crop {
             CropResult::Single(crop) => {
@@ -777,7 +750,7 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_three_to_five_heads_crop_far_default() {
+    fn test_calculate_three_to_four_heads_crop_far_default() {
         let frame_width = 1920.0;
         let frame_height = 1080.0;
         
@@ -787,7 +760,7 @@ mod tests {
         let head3 = Hbb::from_cxcywh(1800.0, frame_height/2.0, 100.0, 100.0);
         let heads = vec![&head1, &head2, &head3];
         
-        let crop = calculate_three_to_five_heads_crop(frame_width, frame_height, &heads);
+        let crop = calculate_three_to_four_heads_crop(frame_width, frame_height, &heads);
         
         match crop {
             CropResult::Stacked(crop1, crop2) => {
@@ -840,7 +813,7 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_three_to_five_heads_crop_far_adjusted() {
+    fn test_calculate_three_to_four_heads_crop_far_adjusted() {
         let frame_width = 1920.0;
         let frame_height = 1080.0;
         
@@ -850,7 +823,7 @@ mod tests {
         let head3 = Hbb::from_cxcywh(1600.0, frame_height/2.0, 100.0, 100.0);
         let heads = vec![&head1, &head2, &head3];
         
-        let crop = calculate_three_to_five_heads_crop(frame_width, frame_height, &heads);
+        let crop = calculate_three_to_four_heads_crop(frame_width, frame_height, &heads);
         
         match crop {
             CropResult::Stacked(crop1, crop2) => {
@@ -905,96 +878,6 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_more_than_five_heads_crop() {
-        let frame_width = 1920.0;
-        let frame_height = 1080.0;
-        
-        // Create 6 heads
-        let head1 = Hbb::from_cxcywh(frame_width/6.0, frame_height/6.0, 100.0, 100.0);
-        let head2 = Hbb::from_cxcywh(frame_width/3.0, frame_height/3.0, 100.0, 100.0);
-        let head3 = Hbb::from_cxcywh(frame_width/2.0, frame_height/2.0, 100.0, 100.0);
-        let head4 = Hbb::from_cxcywh(2.0 * frame_width/3.0, 2.0 * frame_height/3.0, 100.0, 100.0);
-        let head5 = Hbb::from_cxcywh(5.0 * frame_width/6.0, 5.0 * frame_height/6.0, 100.0, 100.0);
-        let head6 = Hbb::from_cxcywh(frame_width - 100.0, frame_height - 100.0, 100.0, 100.0);
-        let heads = vec![&head1, &head2, &head3, &head4, &head5, &head6];
-        
-        let crop = calculate_more_than_five_heads_crop(frame_width, frame_height, &heads);
-        
-        match crop {
-            CropResult::Single(crop) => {
-                // Find the largest head by area
-                let largest_head = heads.iter().max_by(|a, b| a.area().partial_cmp(&b.area()).unwrap()).unwrap();
-                let head_center_x = largest_head.cx();
-                
-                // Height should match frame height
-                assert!((crop.height - frame_height).abs() < 1.0);
-                
-                // Width should be 3/4 of the height (3:4 aspect ratio)
-                let expected_width = frame_height * (3.0/4.0);
-                assert!((crop.width - expected_width).abs() < 1.0);
-                
-                // Should be centered on the largest head unless at the edge
-                let eps = 1e-3;
-                if crop.x.abs() > eps && (frame_width - (crop.x + crop.width)).abs() > eps {
-                    assert!((crop.x + crop.width/2.0 - head_center_x).abs() < 1.0);
-                }
-                
-                // Should start at y = 0
-                assert!(crop.y.abs() < 1.0);
-                
-                // Should be within frame bounds
-                assert!(crop.x >= 0.0);
-                assert!(crop.y >= 0.0);
-                assert!(crop.x + crop.width <= frame_width);
-                assert!(crop.y + crop.height <= frame_height);
-            }
-            _ => panic!("Expected single crop for more than 5 heads case"),
-        }
-    }
-
-    #[test]
-    fn test_calculate_more_than_five_heads_crop_edge_head() {
-        let frame_width = 1920.0;
-        let frame_height = 1080.0;
-        
-        // Create heads with the largest one near the right edge
-        let head1 = Hbb::from_cxcywh(frame_width/6.0, frame_height/6.0, 100.0, 100.0);
-        let head2 = Hbb::from_cxcywh(frame_width/3.0, frame_height/3.0, 100.0, 100.0);
-        let head3 = Hbb::from_cxcywh(frame_width/2.0, frame_height/2.0, 100.0, 100.0);
-        let head4 = Hbb::from_cxcywh(2.0 * frame_width/3.0, 2.0 * frame_height/3.0, 100.0, 100.0);
-        let head5 = Hbb::from_cxcywh(5.0 * frame_width/6.0, 5.0 * frame_height/6.0, 100.0, 100.0);
-        // Make head6 the largest and position it near the right edge
-        let head6 = Hbb::from_cxcywh(frame_width - 250.0, frame_height/2.0, 200.0, 200.0);
-        let heads = vec![&head1, &head2, &head3, &head4, &head5, &head6];
-        
-        let crop = calculate_more_than_five_heads_crop(frame_width, frame_height, &heads);
-        
-        match crop {
-            CropResult::Single(crop) => {
-                // Height should match frame height
-                assert!((crop.height - frame_height).abs() < 1.0);
-                
-                // Width should be 3/4 of the height (3:4 aspect ratio)
-                let expected_width = frame_height * (3.0/4.0);
-                assert!((crop.width - expected_width).abs() < 1.0);
-                
-                // Should be clamped to right edge since largest head is near the edge
-                assert!((crop.x + crop.width - frame_width).abs() < 1.0);
-                
-                // Should start at y = 0
-                assert!(crop.y.abs() < 1.0);
-                
-                // Should be within frame bounds
-                assert!(crop.x >= 0.0);
-                assert!(crop.y >= 0.0);
-                assert!(crop.x + crop.width <= frame_width);
-                assert!(crop.y + crop.height <= frame_height);
-            }
-            _ => panic!("Expected single crop for more than 5 heads case"),
-        }
-    }
-
-    #[test]
     fn test_calculate_crop_area() {
         let frame_width = 1920.0;
         let frame_height = 1080.0;
@@ -1038,7 +921,7 @@ mod tests {
         let crop = calculate_crop_area(frame_width, frame_height, &detection, head_prob_threshold).unwrap();
         assert!(matches!(crop, CropResult::Stacked(_, _)));
         
-        // Test more than five heads
+        // Test more than five heads - should use no heads logic
         let mut detection = Y::default();
         let head1 = Hbb::from_cxcywh(frame_width/6.0, frame_height/6.0, 100.0, 100.0)
             .with_confidence(0.9);

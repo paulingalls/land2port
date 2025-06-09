@@ -10,6 +10,7 @@ mod audio;
 mod cli;
 mod config;
 mod crop;
+mod crop_buffer;
 mod image;
 mod transcript;
 
@@ -90,8 +91,9 @@ async fn main() -> Result<()> {
         )
         .with_mask_style(Style::mask().with_draw_mask_polygon_largest(true));
 
-    // Store the previous crop result
-    let mut previous_crop: Option<crop::CropResult> = None;
+    // Initialize frame buffer
+    let mut frame_buffer = crop_buffer::CropBuffer::new(2.0, 30.0); // 2 second buffer at 30fps
+    let mut frame_time = 0.0;
 
     // run & annotate
     for xs in &dl {
@@ -107,7 +109,7 @@ async fn main() -> Result<()> {
         }
 
         let ys = model.forward(&xs)?;
-        println!("ys: {:?}", ys);
+        // println!("ys: {:?}", ys);
 
         for (x, y) in xs.iter().zip(ys.iter()) {
             let img = annotator.annotate(x, y)?;
@@ -120,41 +122,19 @@ async fn main() -> Result<()> {
                 0.5, // head probability threshold
             )?;
 
-            // Compare with previous crop if it exists
-            let crop_result = if let Some(prev_crop) = &previous_crop {
-                let should_use_prev = match (&new_crop, prev_crop) {
-                    (crop::CropResult::Single(new), crop::CropResult::Single(prev)) => {
-                        new.is_within_percentage(prev, img.width() as f32, 10.0)
-                    }
-                    (
-                        crop::CropResult::Stacked(new1, new2),
-                        crop::CropResult::Stacked(prev1, prev2),
-                    ) => {
-                        new1.is_within_percentage(prev1, img.width() as f32, 10.0)
-                            && new2.is_within_percentage(prev2, img.width() as f32, 10.0)
-                    }
-                    _ => false, // If crop types don't match, use the new crop
-                };
+            // Add frame to buffer
+            frame_buffer.add_frame(img.clone(), new_crop.clone(), frame_time)?;
 
-                if should_use_prev {
-                    prev_crop.clone()
-                } else {
-                    new_crop.clone()
-                }
-            } else {
-                new_crop.clone()
-            };
+            // Process buffer and get any frames that can be committed
+            let committed_frames = frame_buffer.process_buffer(&new_crop, img.width() as f32)?;
 
-            previous_crop = Some(crop_result.clone());
+            // Write committed frames to video
+            for frame in committed_frames {
+                viewer.imshow(&frame)?;
+                viewer.write_video_frame(&frame)?;
+            }
 
-            println!("crop_result: {:?}", crop_result);
-
-            // Create the cropped image
-            let cropped_img = image::create_cropped_image(&img, &crop_result, img.height() as u32)?;
-
-            // Display the cropped image
-            viewer.imshow(&cropped_img)?;
-            viewer.write_video_frame(&cropped_img)?;
+            frame_time += 1.0 / 30.0;
         }
     }
 
