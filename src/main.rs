@@ -10,6 +10,7 @@ mod audio;
 mod cli;
 mod config;
 mod crop;
+mod history;
 mod image;
 mod transcript;
 
@@ -19,6 +20,41 @@ fn create_output_dir() -> Result<String> {
     let output_dir = format!("./runs/{}", timestamp);
     fs::create_dir_all(&output_dir)?;
     Ok(output_dir)
+}
+
+fn is_crop_similar(
+    crop1: &crop::CropResult,
+    crop2: &crop::CropResult,
+    width: f32,
+    threshold: f32,
+) -> bool {
+    match (crop1, crop2) {
+        (crop::CropResult::Single(crop1), crop::CropResult::Single(crop2)) => {
+            crop1.is_within_percentage(crop2, width, threshold)
+        }
+        (
+            crop::CropResult::Stacked(crop1_1, crop1_2),
+            crop::CropResult::Stacked(crop2_1, crop2_2),
+        ) => {
+            crop1_1.is_within_percentage(crop2_1, width, threshold)
+                && crop1_2.is_within_percentage(crop2_2, width, threshold)
+        }
+        _ => false, // If crop types don't match, use the new crop
+    }
+}
+
+fn process_and_display_crop(
+    img: &usls::Image,
+    crop_result: &crop::CropResult,
+    viewer: &mut Viewer,
+    headless: bool,
+) -> Result<()> {
+    let cropped_img = image::create_cropped_image(img, crop_result, img.height() as u32)?;
+    if !headless {
+        viewer.imshow(&cropped_img)?;
+    }
+    viewer.write_video_frame(&cropped_img)?;
+    Ok(())
 }
 
 #[tokio::main]
@@ -60,18 +96,18 @@ async fn main() -> Result<()> {
     .await?;
     println!("Transcription completed successfully");
 
-    let mut viewer = Viewer::default()
-        .with_window_scale(0.5)
-        .with_fps(30)
-        .with_saveout(processed_video.clone());
-
     // build model
     let mut model = YOLO::new(config.commit()?)?;
 
     // build dataloader
-    let dl = DataLoader::new(&args.source)?
-        .with_batch(model.batch() as _)
-        .build()?;
+    let data_loader = DataLoader::new(&args.source)?.with_batch(model.batch() as _);
+
+    let mut viewer = Viewer::default()
+        .with_window_scale(0.5)
+        .with_fps(data_loader.video_decoder().unwrap().frame_rate() as usize)
+        .with_saveout(processed_video.clone());
+
+    let dl =data_loader.build()?;
 
     // build annotator
     let annotator = Annotator::default()
@@ -92,6 +128,7 @@ async fn main() -> Result<()> {
 
     // Store the previous crop result
     let mut previous_crop: Option<crop::CropResult> = None;
+    let mut history = history::CropHistory::new();
 
     // run & annotate
     for xs in &dl {
@@ -110,51 +147,72 @@ async fn main() -> Result<()> {
         println!("ys: {:?}", ys);
 
         for (x, y) in xs.iter().zip(ys.iter()) {
-            let img = annotator.annotate(x, y)?;
+            let img = if !args.headless { annotator.annotate(x, y)? } else { x.clone() };
 
             // Calculate crop areas based on the detection results
-            let new_crop = crop::calculate_crop_area(
+            let latest_crop = crop::calculate_crop_area(
                 img.width() as f32,
                 img.height() as f32,
                 y,
-                0.5, // head probability threshold
+                0.7, // head probability threshold
             )?;
 
             // Compare with previous crop if it exists
-            let crop_result = if let Some(prev_crop) = &previous_crop {
-                let should_use_prev = match (&new_crop, prev_crop) {
-                    (crop::CropResult::Single(new), crop::CropResult::Single(prev)) => {
-                        new.is_within_percentage(prev, img.width() as f32, 10.0)
+            let crop_result: Option<crop::CropResult> = if let Some(prev_crop) = &previous_crop {
+                if is_crop_similar(
+                    &latest_crop,
+                    prev_crop,
+                    img.width() as f32,
+                    args.smooth_percentage,
+                ) {
+                    if !history.is_empty() {
+                        while let Some(pair) = history.pop_front() {
+                            process_and_display_crop(&pair.image, prev_crop, &mut viewer, args.headless)?;
+                        }
                     }
-                    (
-                        crop::CropResult::Stacked(new1, new2),
-                        crop::CropResult::Stacked(prev1, prev2),
-                    ) => {
-                        new1.is_within_percentage(prev1, img.width() as f32, 10.0)
-                            && new2.is_within_percentage(prev2, img.width() as f32, 10.0)
-                    }
-                    _ => false, // If crop types don't match, use the new crop
-                };
-
-                if should_use_prev {
-                    prev_crop.clone()
+                    Some(prev_crop.clone())
                 } else {
-                    new_crop.clone()
+                    let mut crop_result: Option<crop::CropResult> = None;
+                    if history.is_empty() {
+                        history.add(latest_crop.clone(), img.clone());
+                    } else {
+                        let change_crop = history.peek_front().unwrap().crop.clone();
+                        if is_crop_similar(
+                            &latest_crop,
+                            &change_crop,
+                            img.width() as f32,
+                            args.smooth_percentage,
+                        ) {
+                            if history.len() == args.smooth_duration {
+                                while let Some(pair) = history.pop_front() {
+                                    process_and_display_crop(
+                                        &pair.image,
+                                        &change_crop,
+                                        &mut viewer,
+                                        args.headless,
+                                    )?;
+                                }
+                                crop_result = Some(change_crop);
+                            } else {
+                                history.add(change_crop.clone(), img.clone());
+                            }
+                        } else {
+                            while let Some(pair) = history.pop_front() {
+                                process_and_display_crop(&pair.image, prev_crop, &mut viewer, args.headless)?;
+                            }
+                            crop_result = Some(prev_crop.clone());
+                        }
+                    }
+                    crop_result
                 }
             } else {
-                new_crop.clone()
+                Some(latest_crop)
             };
 
-            previous_crop = Some(crop_result.clone());
-
-            println!("crop_result: {:?}", crop_result);
-
-            // Create the cropped image
-            let cropped_img = image::create_cropped_image(&img, &crop_result, img.height() as u32)?;
-
-            // Display the cropped image
-            viewer.imshow(&cropped_img)?;
-            viewer.write_video_frame(&cropped_img)?;
+            if let Some(crop_result) = crop_result {
+                previous_crop = Some(crop_result.clone());
+                process_and_display_crop(&img, &crop_result, &mut viewer, args.headless)?;
+            }
         }
     }
 

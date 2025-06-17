@@ -118,4 +118,16 @@ pub struct Args {
     /// retain classes
     #[argh(option)]
     pub retain_classes: Vec<usize>,
-} 
+
+    /// smooth percentage threshold
+    #[argh(option, default = "10.0")]
+    pub smooth_percentage: f32,
+
+    /// smooth duration in frames
+    #[argh(option, default = "45")]
+    pub smooth_duration: usize,
+
+    /// use headless mode
+    #[argh(switch)]
+    pub headless: bool,
+}
