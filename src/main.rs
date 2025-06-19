@@ -104,7 +104,7 @@ async fn main() -> Result<()> {
 
     let mut viewer = Viewer::default()
         .with_window_scale(0.5)
-        .with_fps(data_loader.video_decoder().unwrap().frame_rate() as usize)
+        .with_fps(data_loader.frame_rate() as usize)
         .with_saveout(processed_video.clone());
 
     let dl =data_loader.build()?;
