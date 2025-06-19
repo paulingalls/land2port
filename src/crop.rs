@@ -92,7 +92,7 @@ pub fn calculate_single_head_crop(frame_width: f32, frame_height: f32, head: &Hb
 }
 
 /// Calculates crop area for two heads
-pub fn calculate_two_heads_crop(frame_width: f32, frame_height: f32, head1: &Hbb, head2: &Hbb) -> CropResult {
+pub fn calculate_two_heads_crop(use_stack_crop: bool, frame_width: f32, frame_height: f32, head1: &Hbb, head2: &Hbb) -> CropResult {
     // Calculate the bounding box of the two heads
     let bbox = calculate_bounding_box(&[head1, head2]);
 
@@ -105,7 +105,7 @@ pub fn calculate_two_heads_crop(frame_width: f32, frame_height: f32, head1: &Hbb
         let crop_y = 0.0; // Start at the top of the frame
 
         CropResult::Single(CropArea::new(crop_x, crop_y, crop_width, crop_height))
-    } else {
+    } else if use_stack_crop {
         // Return two crops with specific dimensions and positions
         let crop_height = frame_height * (8.0/9.0);
         let crop_width = frame_height;
@@ -182,11 +182,13 @@ pub fn calculate_two_heads_crop(frame_width: f32, frame_height: f32, head1: &Hbb
         let crop2 = CropArea::new(crop2_x, crop2_y, crop_width, crop_height);
 
         CropResult::Stacked(crop1, crop2)
+    } else {
+        calculate_crop_from_largest_head(frame_width, frame_height, &[head1, head2])
     }
 }
 
 /// Calculates crop area for three to five heads
-pub fn calculate_three_to_five_heads_crop(frame_width: f32, frame_height: f32, heads: &[&Hbb]) -> CropResult {
+pub fn calculate_three_to_five_heads_crop(use_stack_crop: bool, frame_width: f32, frame_height: f32, heads: &[&Hbb]) -> CropResult {
     // Calculate the bounding box that contains all heads
     let bbox = calculate_bounding_box(heads);
     
@@ -209,7 +211,7 @@ pub fn calculate_three_to_five_heads_crop(frame_width: f32, frame_height: f32, h
         }
         
         CropResult::Single(CropArea::new(x, 0.0, width, height))
-    } else {
+    } else if use_stack_crop {
         // For far heads, use assignment-based approach
         let crop_height = frame_height * (8.0/9.0);
         let crop_width = frame_height;
@@ -294,11 +296,13 @@ pub fn calculate_three_to_five_heads_crop(frame_width: f32, frame_height: f32, h
             }
         }
         CropResult::Stacked(crop1, crop2)
+    } else {
+        calculate_crop_from_largest_head(frame_width, frame_height, heads)
     }
 }
 
-/// Calculates crop area for more than five heads
-pub fn calculate_more_than_five_heads_crop(frame_width: f32, frame_height: f32, heads: &[&Hbb]) -> CropResult {
+/// Calculates crop area from the largest head
+pub fn calculate_crop_from_largest_head(frame_width: f32, frame_height: f32, heads: &[&Hbb]) -> CropResult {
     // Find the largest head by area
     let largest_head = heads
         .iter()
@@ -327,11 +331,13 @@ pub fn calculate_more_than_five_heads_crop(frame_width: f32, frame_height: f32, 
 /// Calculates the optimal crop area based on detected heads
 /// 
 /// # Arguments
+/// * `use_stack_crop` - Whether the function can return a stacked crop result
 /// * `frame_width` - Width of the input frame
 /// * `frame_height` - Height of the input frame
 /// * `detection` - The YOLO detection results for the frame
 /// * `head_prob_threshold` - Minimum probability threshold for considering a detection as a head
 pub fn calculate_crop_area(
+    use_stack_crop: bool,
     frame_width: f32,
     frame_height: f32,
     detection: &Y,
@@ -355,9 +361,9 @@ pub fn calculate_crop_area(
     match heads.len() {
         0 => Ok(calculate_no_heads_crop(frame_width, frame_height)),
         1 => Ok(calculate_single_head_crop(frame_width, frame_height, heads[0])),
-        2 => Ok(calculate_two_heads_crop(frame_width, frame_height, heads[0], heads[1])),
-        3..=5 => Ok(calculate_three_to_five_heads_crop(frame_width, frame_height, &heads)),
-        _ => Ok(calculate_more_than_five_heads_crop(frame_width, frame_height, &heads)),
+        2 => Ok(calculate_two_heads_crop(use_stack_crop, frame_width, frame_height, heads[0], heads[1])),
+        3..=5 => Ok(calculate_three_to_five_heads_crop(use_stack_crop, frame_width, frame_height, &heads)),
+        _ => Ok(calculate_crop_from_largest_head(frame_width, frame_height, &heads)),
     }
 }
 
@@ -557,7 +563,7 @@ mod tests {
         // Test close heads - heads are within 3/4 of frame height
         let head1 = Hbb::from_xywh(300.0, 300.0, 100.0, 100.0);
         let head2 = Hbb::from_xywh(450.0, 300.0, 100.0, 100.0);
-        let crop = calculate_two_heads_crop(frame_width, frame_height, &head1, &head2);
+        let crop = calculate_two_heads_crop(true, frame_width, frame_height, &head1, &head2);
         
         match crop {
             CropResult::Single(crop) => {
@@ -596,7 +602,7 @@ mod tests {
         // Test far heads - heads are more than 3/4 of frame height apart
         let head1 = Hbb::from_cxcywh(frame_width/4.0, frame_height/2.0, 100.0, 100.0);
         let head2 = Hbb::from_cxcywh(3.0 * frame_width/4.0, frame_height/2.0, 100.0, 100.0);
-        let crop = calculate_two_heads_crop(frame_width, frame_height, &head1, &head2);
+        let crop = calculate_two_heads_crop(true, frame_width, frame_height, &head1, &head2);
         
         match crop {
             CropResult::Stacked(crop1, crop2) => {
@@ -642,7 +648,7 @@ mod tests {
         // Test with one head at the top and one at the bottom
         let head1 = Hbb::from_cxcywh(frame_width/4.0, 50.0, 100.0, 100.0); // Head near top
         let head2 = Hbb::from_cxcywh(3.0 * frame_width/4.0, frame_height - 50.0, 100.0, 100.0); // Head near bottom
-        let crop = calculate_two_heads_crop(frame_width, frame_height, &head1, &head2);
+        let crop = calculate_two_heads_crop(true, frame_width, frame_height, &head1, &head2);
         
         match crop {
             CropResult::Stacked(crop1, crop2) => {
@@ -692,7 +698,7 @@ mod tests {
         // Second head is far to the right, ensuring the bounding box is wider than 3/4 of frame height
         let head2 = Hbb::from_cxcywh(frame_width - 200.0, frame_height/2.0, 100.0, 100.0);
         
-        let crop = calculate_two_heads_crop(frame_width, frame_height, &head1, &head2);
+        let crop = calculate_two_heads_crop(true, frame_width, frame_height, &head1, &head2);
         
         match crop {
             CropResult::Stacked(crop1, crop2) => {
@@ -744,7 +750,7 @@ mod tests {
         let head3 = Hbb::from_cxcywh(frame_width/2.0 + 100.0, frame_height/2.0, 100.0, 100.0);
         let heads = vec![&head1, &head2, &head3];
         
-        let crop = calculate_three_to_five_heads_crop(frame_width, frame_height, &heads);
+        let crop = calculate_three_to_five_heads_crop(true, frame_width, frame_height, &heads);
         
         match crop {
             CropResult::Single(crop) => {
@@ -787,7 +793,7 @@ mod tests {
         let head3 = Hbb::from_cxcywh(1800.0, frame_height/2.0, 100.0, 100.0);
         let heads = vec![&head1, &head2, &head3];
         
-        let crop = calculate_three_to_five_heads_crop(frame_width, frame_height, &heads);
+        let crop = calculate_three_to_five_heads_crop(true, frame_width, frame_height, &heads);
         
         match crop {
             CropResult::Stacked(crop1, crop2) => {
@@ -850,7 +856,7 @@ mod tests {
         let head3 = Hbb::from_cxcywh(1600.0, frame_height/2.0, 100.0, 100.0);
         let heads = vec![&head1, &head2, &head3];
         
-        let crop = calculate_three_to_five_heads_crop(frame_width, frame_height, &heads);
+        let crop = calculate_three_to_five_heads_crop(true, frame_width, frame_height, &heads);
         
         match crop {
             CropResult::Stacked(crop1, crop2) => {
@@ -918,7 +924,7 @@ mod tests {
         let head6 = Hbb::from_cxcywh(frame_width - 100.0, frame_height - 100.0, 100.0, 100.0);
         let heads = vec![&head1, &head2, &head3, &head4, &head5, &head6];
         
-        let crop = calculate_more_than_five_heads_crop(frame_width, frame_height, &heads);
+        let crop = calculate_crop_from_largest_head(frame_width, frame_height, &heads);
         
         match crop {
             CropResult::Single(crop) => {
@@ -967,7 +973,7 @@ mod tests {
         let head6 = Hbb::from_cxcywh(frame_width - 250.0, frame_height/2.0, 200.0, 200.0);
         let heads = vec![&head1, &head2, &head3, &head4, &head5, &head6];
         
-        let crop = calculate_more_than_five_heads_crop(frame_width, frame_height, &heads);
+        let crop = calculate_crop_from_largest_head(frame_width, frame_height, &heads);
         
         match crop {
             CropResult::Single(crop) => {
@@ -1002,7 +1008,7 @@ mod tests {
         
         // Test no heads
         let detection = Y::default();
-        let crop = calculate_crop_area(frame_width, frame_height, &detection, head_prob_threshold).unwrap();
+        let crop = calculate_crop_area(true, frame_width, frame_height, &detection, head_prob_threshold).unwrap();
         assert!(matches!(crop, CropResult::Single(_)));
         
         // Test single head
@@ -1011,7 +1017,7 @@ mod tests {
             .with_confidence(0.9);
         let hbbs = vec![head];
         detection = detection.with_hbbs(&hbbs);
-        let crop = calculate_crop_area(frame_width, frame_height, &detection, head_prob_threshold).unwrap();
+        let crop = calculate_crop_area(true, frame_width, frame_height, &detection, head_prob_threshold).unwrap();
         assert!(matches!(crop, CropResult::Single(_)));
         
         // Test two heads
@@ -1022,7 +1028,7 @@ mod tests {
             .with_confidence(0.9);
         let hbbs = vec![head1, head2];
         detection = detection.with_hbbs(&hbbs);
-        let crop = calculate_crop_area(frame_width, frame_height, &detection, head_prob_threshold).unwrap();
+        let crop = calculate_crop_area(true, frame_width, frame_height, &detection, head_prob_threshold).unwrap();
         assert!(matches!(crop, CropResult::Stacked(_, _)));
         
         // Test three heads
@@ -1035,7 +1041,7 @@ mod tests {
             .with_confidence(0.9);
         let hbbs = vec![head1, head2, head3];
         detection = detection.with_hbbs(&hbbs);
-        let crop = calculate_crop_area(frame_width, frame_height, &detection, head_prob_threshold).unwrap();
+        let crop = calculate_crop_area(true, frame_width, frame_height, &detection, head_prob_threshold).unwrap();
         assert!(matches!(crop, CropResult::Stacked(_, _)));
         
         // Test more than five heads
@@ -1054,7 +1060,7 @@ mod tests {
             .with_confidence(0.9);
         let hbbs = vec![head1, head2, head3, head4, head5, head6];
         detection = detection.with_hbbs(&hbbs);
-        let crop = calculate_crop_area(frame_width, frame_height, &detection, head_prob_threshold).unwrap();
+        let crop = calculate_crop_area(true, frame_width, frame_height, &detection, head_prob_threshold).unwrap();
         assert!(matches!(crop, CropResult::Single(_)));
     }
 
@@ -1105,5 +1111,103 @@ mod tests {
         let crop1 = CropArea::new(100.0, 100.0, 200.0, 200.0);
         let crop2 = CropArea::new(150.0, 100.0, 300.0, 200.0); // x within threshold, width over threshold
         assert!(!crop1.is_within_percentage(&crop2, frame_width, threshold));
+    }
+
+    #[test]
+    fn test_calculate_two_heads_crop_far_no_stack() {
+        let frame_width = 1920.0;
+        let frame_height = 1080.0;
+        
+        // Test far heads with use_stack_crop = false
+        let head1 = Hbb::from_cxcywh(frame_width/4.0, frame_height/2.0, 100.0, 100.0);
+        let head2 = Hbb::from_cxcywh(3.0 * frame_width/4.0, frame_height/2.0, 100.0, 100.0);
+        let crop = calculate_two_heads_crop(false, frame_width, frame_height, &head1, &head2);
+        
+        match crop {
+            CropResult::Single(crop) => {
+                // Should return a single crop based on the largest head
+                // Height should match frame height
+                assert!((crop.height - frame_height).abs() < 1.0);
+                
+                // Width should be 3/4 of the height (3:4 aspect ratio)
+                let expected_width = frame_height * (3.0/4.0);
+                assert!((crop.width - expected_width).abs() < 1.0);
+                
+                // Should be within frame bounds
+                assert!(crop.x >= 0.0);
+                assert!(crop.y >= 0.0);
+                assert!(crop.x + crop.width <= frame_width);
+                assert!(crop.y + crop.height <= frame_height);
+            }
+            _ => panic!("Expected single crop when use_stack_crop is false"),
+        }
+    }
+
+    #[test]
+    fn test_calculate_three_to_five_heads_crop_far_no_stack() {
+        let frame_width = 1920.0;
+        let frame_height = 1080.0;
+        
+        // Create three heads that are far apart horizontally
+        let head1 = Hbb::from_cxcywh(200.0, frame_height/2.0, 100.0, 100.0);
+        let head2 = Hbb::from_cxcywh(1000.0, frame_height/2.0, 200.0, 100.0); // Largest head
+        let head3 = Hbb::from_cxcywh(1800.0, frame_height/2.0, 100.0, 100.0);
+        let heads = vec![&head1, &head2, &head3];
+        
+        let crop = calculate_three_to_five_heads_crop(false, frame_width, frame_height, &heads);
+        
+        match crop {
+            CropResult::Single(crop) => {
+                // Should return a single crop based on the largest head (head2)
+                // Height should match frame height
+                assert!((crop.height - frame_height).abs() < 1.0);
+                
+                // Width should be 3/4 of the height (3:4 aspect ratio)
+                let expected_width = frame_height * (3.0/4.0);
+                assert!((crop.width - expected_width).abs() < 1.0);
+                
+                // Should be centered on the largest head (head2)
+                let largest_head_center = head2.cx();
+                assert!((crop.x + crop.width/2.0 - largest_head_center).abs() < 1.0);
+                
+                // Should be within frame bounds
+                assert!(crop.x >= 0.0);
+                assert!(crop.y >= 0.0);
+                assert!(crop.x + crop.width <= frame_width);
+                assert!(crop.y + crop.height <= frame_height);
+            }
+            _ => panic!("Expected single crop when use_stack_crop is false"),
+        }
+    }
+
+    #[test]
+    fn test_calculate_crop_area_no_stack() {
+        let frame_width = 1920.0;
+        let frame_height = 1080.0;
+        let head_prob_threshold = 0.5;
+        
+        // Test two heads with use_stack_crop = false
+        let mut detection = Y::default();
+        let head1 = Hbb::from_cxcywh(frame_width/4.0, frame_height/2.0, 100.0, 100.0)
+            .with_confidence(0.9);
+        let head2 = Hbb::from_cxcywh(3.0 * frame_width/4.0, frame_height/2.0, 100.0, 100.0)
+            .with_confidence(0.9);
+        let hbbs = vec![head1, head2];
+        detection = detection.with_hbbs(&hbbs);
+        let crop = calculate_crop_area(false, frame_width, frame_height, &detection, head_prob_threshold).unwrap();
+        assert!(matches!(crop, CropResult::Single(_)));
+        
+        // Test three heads with use_stack_crop = false
+        let mut detection = Y::default();
+        let head1 = Hbb::from_cxcywh(frame_width/4.0, frame_height/4.0, 100.0, 100.0)
+            .with_confidence(0.9);
+        let head2 = Hbb::from_cxcywh(frame_width/2.0, frame_height/2.0, 200.0, 200.0) // Largest head
+            .with_confidence(0.9);
+        let head3 = Hbb::from_cxcywh(3.0 * frame_width/4.0, 3.0 * frame_height/4.0, 100.0, 100.0)
+            .with_confidence(0.9);
+        let hbbs = vec![head1, head2, head3];
+        detection = detection.with_hbbs(&hbbs);
+        let crop = calculate_crop_area(false, frame_width, frame_height, &detection, head_prob_threshold).unwrap();
+        assert!(matches!(crop, CropResult::Single(_)));
     }
 } 

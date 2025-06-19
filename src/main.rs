@@ -151,6 +151,7 @@ async fn main() -> Result<()> {
 
             // Calculate crop areas based on the detection results
             let latest_crop = crop::calculate_crop_area(
+                args.use_stack_crop,
                 img.width() as f32,
                 img.height() as f32,
                 y,

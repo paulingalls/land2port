@@ -130,4 +130,8 @@ pub struct Args {
     /// use headless mode
     #[argh(switch)]
     pub headless: bool,
+
+    /// enable stack crop
+    #[argh(switch)]
+    pub use_stack_crop: bool,
 }
