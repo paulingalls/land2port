@@ -1,4 +1,4 @@
-use usls::{Hbb, Y};
+use usls::Hbb;
 use anyhow::Result;
 
 /// Represents a crop area in the image
@@ -334,36 +334,19 @@ pub fn calculate_crop_from_largest_head(frame_width: f32, frame_height: f32, hea
 /// * `use_stack_crop` - Whether the function can return a stacked crop result
 /// * `frame_width` - Width of the input frame
 /// * `frame_height` - Height of the input frame
-/// * `detection` - The YOLO detection results for the frame
-/// * `head_prob_threshold` - Minimum probability threshold for considering a detection as a head
+/// * `heads` - Vector of head detections that have already been filtered by confidence threshold
 pub fn calculate_crop_area(
     use_stack_crop: bool,
     frame_width: f32,
     frame_height: f32,
-    detection: &Y,
-    head_prob_threshold: f32,
+    heads: &[&Hbb],
 ) -> Result<CropResult> {
-    // Get all head detections above the probability threshold
-    let heads: Vec<&Hbb> = if let Some(hbbs) = detection.hbbs() {
-        hbbs.iter()
-            .filter(|hbb| {
-                if let Some(confidence) = hbb.confidence() {
-                    confidence >= head_prob_threshold
-                } else {
-                    false
-                }
-            })
-            .collect()
-    } else {
-        vec![]
-    };
-
     match heads.len() {
         0 => Ok(calculate_no_heads_crop(frame_width, frame_height)),
         1 => Ok(calculate_single_head_crop(frame_width, frame_height, heads[0])),
         2 => Ok(calculate_two_heads_crop(use_stack_crop, frame_width, frame_height, heads[0], heads[1])),
-        3..=5 => Ok(calculate_three_to_five_heads_crop(use_stack_crop, frame_width, frame_height, &heads)),
-        _ => Ok(calculate_crop_from_largest_head(frame_width, frame_height, &heads)),
+        3..=5 => Ok(calculate_three_to_five_heads_crop(use_stack_crop, frame_width, frame_height, heads)),
+        _ => Ok(calculate_no_heads_crop(frame_width, frame_height)),
     }
 }
 
@@ -398,10 +381,39 @@ pub fn calculate_bounding_box(heads: &[&Hbb]) -> CropArea {
     )
 }
 
+/// Determines if two head counts would result in different crop classes
+/// 
+/// Crop classes are defined as:
+/// - 0 heads
+/// - 1 head  
+/// - 2 heads
+/// - 3 to 5 heads
+/// - More than 5 heads
+/// 
+/// # Arguments
+/// * `head_count1` - First head count
+/// * `head_count2` - Second head count
+/// 
+/// # Returns
+/// `true` if the head counts would result in different crop classes, `false` otherwise
+pub fn is_crop_class_same(head_count1: usize, head_count2: usize) -> bool {
+    // Helper function to get crop class for a given head count
+    fn get_crop_class(head_count: usize) -> u8 {
+        match head_count {
+            0 => 0,           // 0 heads
+            1 => 1,           // 1 head
+            2 => 2,           // 2 heads
+            3..=5 => 3,       // 3 to 5 heads
+            _ => 4,           // More than 5 heads
+        }
+    }
+    
+    get_crop_class(head_count1) == get_crop_class(head_count2)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use usls::Y;
 
     #[test]
     fn test_calculate_bounding_box() {
@@ -1004,48 +1016,40 @@ mod tests {
     fn test_calculate_crop_area() {
         let frame_width = 1920.0;
         let frame_height = 1080.0;
-        let head_prob_threshold = 0.5;
         
         // Test no heads
-        let detection = Y::default();
-        let crop = calculate_crop_area(true, frame_width, frame_height, &detection, head_prob_threshold).unwrap();
+        let heads: Vec<&Hbb> = vec![];
+        let crop = calculate_crop_area(true, frame_width, frame_height, &heads).unwrap();
         assert!(matches!(crop, CropResult::Single(_)));
         
         // Test single head
-        let mut detection = Y::default();
         let head = Hbb::from_cxcywh(frame_width/2.0, frame_height/2.0, 100.0, 100.0)
             .with_confidence(0.9);
-        let hbbs = vec![head];
-        detection = detection.with_hbbs(&hbbs);
-        let crop = calculate_crop_area(true, frame_width, frame_height, &detection, head_prob_threshold).unwrap();
+        let hbbs = vec![&head];
+        let crop = calculate_crop_area(true, frame_width, frame_height, &hbbs).unwrap();
         assert!(matches!(crop, CropResult::Single(_)));
         
         // Test two heads
-        let mut detection = Y::default();
         let head1 = Hbb::from_cxcywh(frame_width/4.0, frame_height/2.0, 100.0, 100.0)
             .with_confidence(0.9);
         let head2 = Hbb::from_cxcywh(3.0 * frame_width/4.0, frame_height/2.0, 100.0, 100.0)
             .with_confidence(0.9);
-        let hbbs = vec![head1, head2];
-        detection = detection.with_hbbs(&hbbs);
-        let crop = calculate_crop_area(true, frame_width, frame_height, &detection, head_prob_threshold).unwrap();
+        let hbbs = vec![&head1, &head2];
+        let crop = calculate_crop_area(true, frame_width, frame_height, &hbbs).unwrap();
         assert!(matches!(crop, CropResult::Stacked(_, _)));
         
         // Test three heads
-        let mut detection = Y::default();
         let head1 = Hbb::from_cxcywh(frame_width/4.0, frame_height/4.0, 100.0, 100.0)
             .with_confidence(0.9);
         let head2 = Hbb::from_cxcywh(frame_width/2.0, frame_height/2.0, 100.0, 100.0)
             .with_confidence(0.9);
         let head3 = Hbb::from_cxcywh(3.0 * frame_width/4.0, 3.0 * frame_height/4.0, 100.0, 100.0)
             .with_confidence(0.9);
-        let hbbs = vec![head1, head2, head3];
-        detection = detection.with_hbbs(&hbbs);
-        let crop = calculate_crop_area(true, frame_width, frame_height, &detection, head_prob_threshold).unwrap();
+        let hbbs = vec![&head1, &head2, &head3];
+        let crop = calculate_crop_area(true, frame_width, frame_height, &hbbs).unwrap();
         assert!(matches!(crop, CropResult::Stacked(_, _)));
         
         // Test more than five heads
-        let mut detection = Y::default();
         let head1 = Hbb::from_cxcywh(frame_width/6.0, frame_height/6.0, 100.0, 100.0)
             .with_confidence(0.9);
         let head2 = Hbb::from_cxcywh(frame_width/3.0, frame_height/3.0, 100.0, 100.0)
@@ -1058,9 +1062,8 @@ mod tests {
             .with_confidence(0.9);
         let head6 = Hbb::from_cxcywh(frame_width - 100.0, frame_height - 100.0, 100.0, 100.0)
             .with_confidence(0.9);
-        let hbbs = vec![head1, head2, head3, head4, head5, head6];
-        detection = detection.with_hbbs(&hbbs);
-        let crop = calculate_crop_area(true, frame_width, frame_height, &detection, head_prob_threshold).unwrap();
+        let hbbs = vec![&head1, &head2, &head3, &head4, &head5, &head6];
+        let crop = calculate_crop_area(true, frame_width, frame_height, &hbbs).unwrap();
         assert!(matches!(crop, CropResult::Single(_)));
     }
 
@@ -1184,30 +1187,59 @@ mod tests {
     fn test_calculate_crop_area_no_stack() {
         let frame_width = 1920.0;
         let frame_height = 1080.0;
-        let head_prob_threshold = 0.5;
         
         // Test two heads with use_stack_crop = false
-        let mut detection = Y::default();
         let head1 = Hbb::from_cxcywh(frame_width/4.0, frame_height/2.0, 100.0, 100.0)
             .with_confidence(0.9);
         let head2 = Hbb::from_cxcywh(3.0 * frame_width/4.0, frame_height/2.0, 100.0, 100.0)
             .with_confidence(0.9);
-        let hbbs = vec![head1, head2];
-        detection = detection.with_hbbs(&hbbs);
-        let crop = calculate_crop_area(false, frame_width, frame_height, &detection, head_prob_threshold).unwrap();
+        let hbbs = vec![&head1, &head2];
+        let crop = calculate_crop_area(false, frame_width, frame_height, &hbbs).unwrap();
         assert!(matches!(crop, CropResult::Single(_)));
         
         // Test three heads with use_stack_crop = false
-        let mut detection = Y::default();
         let head1 = Hbb::from_cxcywh(frame_width/4.0, frame_height/4.0, 100.0, 100.0)
             .with_confidence(0.9);
         let head2 = Hbb::from_cxcywh(frame_width/2.0, frame_height/2.0, 200.0, 200.0) // Largest head
             .with_confidence(0.9);
         let head3 = Hbb::from_cxcywh(3.0 * frame_width/4.0, 3.0 * frame_height/4.0, 100.0, 100.0)
             .with_confidence(0.9);
-        let hbbs = vec![head1, head2, head3];
-        detection = detection.with_hbbs(&hbbs);
-        let crop = calculate_crop_area(false, frame_width, frame_height, &detection, head_prob_threshold).unwrap();
+        let hbbs = vec![&head1, &head2, &head3];
+        let crop = calculate_crop_area(false, frame_width, frame_height, &hbbs).unwrap();
         assert!(matches!(crop, CropResult::Single(_)));
+    }
+
+    #[test]
+    fn test_has_crop_class_changed() {
+        // Test same class - should return true
+        assert!(is_crop_class_same(0, 0));   // Both 0 heads
+        assert!(is_crop_class_same(1, 1));   // Both 1 head
+        assert!(is_crop_class_same(2, 2));   // Both 2 heads
+        assert!(is_crop_class_same(3, 3));   // Both 3 heads (3-5 class)
+        assert!(is_crop_class_same(4, 4));   // Both 4 heads (3-5 class)
+        assert!(is_crop_class_same(5, 5));   // Both 5 heads (3-5 class)
+        assert!(is_crop_class_same(6, 6));   // Both 6 heads (>5 class)
+        assert!(is_crop_class_same(10, 10)); // Both 10 heads (>5 class)
+        
+        // Test different classes - should return false
+        assert!(!is_crop_class_same(0, 1));    // 0 heads vs 1 head
+        assert!(!is_crop_class_same(1, 2));    // 1 head vs 2 heads
+        assert!(!is_crop_class_same(2, 3));    // 2 heads vs 3 heads
+        assert!(!is_crop_class_same(5, 6));    // 5 heads vs 6 heads
+        assert!(!is_crop_class_same(0, 6));    // 0 heads vs 6 heads
+        assert!(!is_crop_class_same(1, 10));   // 1 head vs 10 heads
+        
+        // Test within same class - should return true
+        assert!(is_crop_class_same(3, 4));   // Both in 3-5 class
+        assert!(is_crop_class_same(3, 5));   // Both in 3-5 class
+        assert!(is_crop_class_same(4, 5));   // Both in 3-5 class
+        assert!(is_crop_class_same(6, 7));   // Both in >5 class
+        assert!(is_crop_class_same(6, 10));  // Both in >5 class
+        assert!(is_crop_class_same(7, 15));  // Both in >5 class
+        
+        // Test edge cases
+        assert!(!is_crop_class_same(2, 3));    // Edge between 2 and 3-5
+        assert!(!is_crop_class_same(5, 6));    // Edge between 3-5 and >5
+        assert!(!is_crop_class_same(0, 100));  // Extreme difference
     }
 } 

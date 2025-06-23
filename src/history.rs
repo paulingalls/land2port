@@ -1,50 +1,51 @@
 use usls::Image;
 use crate::crop::CropResult;
 
-/// A structure to hold a pair of CropResult and Image
+/// A structure to hold frame data including crop, image, and head count
 #[derive(Clone)]
-pub struct CropImagePair {
+pub struct FrameData {
     pub crop: CropResult,
     pub image: Image,
+    pub head_count: usize,
 }
 
-/// A structure to maintain a history of CropResult and Image pairs
+/// A structure to maintain a history of frame data
 pub struct CropHistory {
-    pairs: Vec<CropImagePair>,
+    frames: Vec<FrameData>,
 }
 
 impl CropHistory {
     /// Create a new empty history
     pub fn new() -> Self {
-        Self { pairs: Vec::new() }
+        Self { frames: Vec::new() }
     }
 
-    /// Add a new pair to the history
-    pub fn add(&mut self, crop: CropResult, image: Image) {
-        self.pairs.push(CropImagePair { crop, image });
+    /// Add a new frame to the history
+    pub fn add(&mut self, crop: CropResult, image: Image, head_count: usize) {
+        self.frames.push(FrameData { crop, image, head_count });
     }
 
-    /// Remove and return the first pair from the history
-    pub fn pop_front(&mut self) -> Option<CropImagePair> {
-        if self.pairs.is_empty() {
+    /// Remove and return the first frame from the history
+    pub fn pop_front(&mut self) -> Option<FrameData> {
+        if self.frames.is_empty() {
             None
         } else {
-            Some(self.pairs.remove(0))
+            Some(self.frames.remove(0))
         }
     }
 
-    /// Get a reference to the first pair without removing it
-    pub fn peek_front(&self) -> Option<&CropImagePair> {
-        self.pairs.first()
+    /// Get a reference to the first frame without removing it
+    pub fn peek_front(&self) -> Option<&FrameData> {
+        self.frames.first()
     }
 
-    /// Get the number of pairs in the history
+    /// Get the number of frames in the history
     pub fn len(&self) -> usize {
-        self.pairs.len()
+        self.frames.len()
     }
 
     /// Check if the history is empty
     pub fn is_empty(&self) -> bool {
-        self.pairs.is_empty()
+        self.frames.is_empty()
     }
 } 

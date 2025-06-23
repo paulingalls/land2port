@@ -18,18 +18,30 @@ pub struct CaptionStyle {
     pub bg_color: Option<String>,
     /// Background opacity (0.0 to 1.0)
     pub bg_opacity: Option<f32>,
+    /// Outline color in hex format (e.g., "000000" for black)
+    pub outline_color: Option<String>,
+    /// Outline thickness in pixels
+    pub outline_thickness: Option<u32>,
+    /// Shadow color in hex format (e.g., "000000" for black)
+    pub shadow_color: Option<String>,
+    /// Shadow distance in pixels
+    pub shadow_distance: Option<u32>,
 }
 
 impl Default for CaptionStyle {
     fn default() -> Self {
         Self {
-            font_size: 10,
+            font_size: 8,
             font_color: "FFFFFF".to_string(),
             font_name: "Arial".to_string(),
             h_align: "center".to_string(),
             margin_bottom: 20,  // 20 pixels from bottom
-            bg_color: Some("000000".to_string()),
-            bg_opacity: Some(0.5),
+            bg_color: None,
+            bg_opacity: None,
+            outline_color: Some("000000".to_string()),
+            outline_thickness: Some(1),
+            shadow_color: None,
+            shadow_distance: None,
         }
     }
 }
@@ -92,6 +104,11 @@ pub fn burn_captions(
         style.margin_bottom
     );
 
+    // Determine BorderStyle based on what's specified (check before moving values)
+    let has_background = style.bg_color.is_some() || style.bg_opacity.is_some();
+    let has_outline = style.outline_color.is_some() || style.outline_thickness.is_some();
+    let has_shadow = style.shadow_color.is_some() || style.shadow_distance.is_some();
+
     // Add background color and opacity if specified
     if let (Some(bg_color), Some(opacity)) = (style.bg_color, style.bg_opacity) {
         // Convert opacity to hex (0-255)
@@ -100,13 +117,54 @@ pub fn burn_captions(
         let bg_color_with_opacity = format!("{}{}", opacity_hex, bg_color);
         
         filter_str.push_str(&format!(
-            ",BackColour=&H{},OutlineColour=&H{},BorderStyle=3,Outline=1,Shadow=0",
-            bg_color_with_opacity,
+            ",BackColour=&H{}",
             bg_color_with_opacity
         ));
     }
 
+    
+    // Add outline color and thickness if specified
+    if let Some(outline_color) = style.outline_color {
+        filter_str.push_str(&format!(
+            ",OutlineColour=&H{}",
+            outline_color
+        ));
+    }
+
+    if let Some(outline_thickness) = style.outline_thickness {
+        filter_str.push_str(&format!(
+            ",Outline={}",
+            outline_thickness
+        ));
+    }
+
+    // Add shadow color and distance if specified
+    if let Some(shadow_color) = style.shadow_color {
+        filter_str.push_str(&format!(
+            ",ShadowColour=&H{}",
+            shadow_color
+        ));
+    }
+
+    if let Some(shadow_distance) = style.shadow_distance {
+        filter_str.push_str(&format!(
+            ",Shadow={}",
+            shadow_distance
+        ));
+    }
+    
+    let border_style = match (has_background, has_outline, has_shadow) {
+        (true, _, _) => 3,
+        (false, true, true) => 1,
+        (false, true, false) => 1,
+        (false, false, true) => 1,
+        (false, false, false) => 0,
+    };
+    
+    filter_str.push_str(&format!(",BorderStyle={}", border_style));
     filter_str.push('\'');
+
+    println!("filter_str: {}", filter_str);
 
     let status = Command::new("ffmpeg")
         .args([
