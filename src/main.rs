@@ -2,6 +2,7 @@ use anyhow::Result;
 use chrono::Local;
 use std::fs;
 use std::path::Path;
+use std::env;
 use usls::{
     Annotator, DataLoader, Hbb, SKELETON_COCO_19, SKELETON_COLOR_COCO_19, Style, Viewer, Y,
     models::YOLO,
@@ -14,6 +15,18 @@ mod crop;
 mod history;
 mod image;
 mod transcript;
+
+/// Helper function to check if debug logging is enabled
+fn is_debug_enabled() -> bool {
+    env::var("RUST_LOG").map(|val| val.to_lowercase() == "debug").unwrap_or(false)
+}
+
+/// Debug print function that only prints when RUST_LOG=debug
+fn debug_println(args: std::fmt::Arguments) {
+    if is_debug_enabled() {
+        println!("{}", args);
+    }
+}
 
 /// Creates a timestamped output directory and returns its path
 fn create_output_dir() -> Result<String> {
@@ -182,15 +195,15 @@ async fn main() -> Result<()> {
                 &heads,
             )?;
 
-            println!("--------------------------------");
-            println!("heads: {:?}", heads);
-            println!("latest_crop: {:?}", latest_crop);
-            println!("previous_crop: {:?}", previous_crop);
-            println!("history length: {:?}", history.len());
-            println!(
+            debug_println(format_args!("--------------------------------"));
+            debug_println(format_args!("heads: {:?}", heads));
+            debug_println(format_args!("latest_crop: {:?}", latest_crop));
+            debug_println(format_args!("previous_crop: {:?}", previous_crop));
+            debug_println(format_args!("history length: {:?}", history.len()));
+            debug_println(format_args!(
                 "current_head_count: {}, previous_head_count: {}",
                 current_head_count, previous_head_count
-            );
+            ));
 
             // Compare with previous crop if it exists
             let mut head_count = current_head_count;
@@ -205,7 +218,7 @@ async fn main() -> Result<()> {
                 );
 
                 if is_same_class && is_latest_crop_similar {
-                    println!("is_same_class && is_latest_crop_similar");
+                    debug_println(format_args!("is_same_class && is_latest_crop_similar"));
                     if !history.is_empty() {
                         while let Some(frame) = history.pop_front() {
                             process_and_display_crop(
@@ -225,8 +238,8 @@ async fn main() -> Result<()> {
                     } else {
                         let change_crop = history.peek_front().unwrap().crop.clone();
                         let change_head_count = history.peek_front().unwrap().head_count;
-                        println!("change_crop: {:?}", change_crop);
-                        println!("change_head_count: {:?}", change_head_count);
+                        debug_println(format_args!("change_crop: {:?}", change_crop));
+                        debug_println(format_args!("change_head_count: {:?}", change_head_count));
                         let is_change_crop_similar = is_crop_similar(
                             &latest_crop,
                             &change_crop,
@@ -235,8 +248,8 @@ async fn main() -> Result<()> {
                         );
                         let is_change_head_count_similar =
                             crop::is_crop_class_same(current_head_count, change_head_count);
-                        println!("is_change_crop_similar: {:?}", is_change_crop_similar);
-                        println!("is_change_head_count_similar: {:?}", is_change_head_count_similar);
+                        debug_println(format_args!("is_change_crop_similar: {:?}", is_change_crop_similar));
+                        debug_println(format_args!("is_change_head_count_similar: {:?}", is_change_head_count_similar));
 
                         if is_change_crop_similar && is_change_head_count_similar {
                             if history.len() == args.smooth_duration {
