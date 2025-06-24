@@ -16,10 +16,10 @@ pub struct Args {
     pub dtype: String,
 
     /// version
-    #[argh(option, default = "8.0")]
+    #[argh(option, default = "11.0")]
     pub ver: f32,
 
-    /// device: cuda, cpu, mps
+    /// device: cuda, cpu, coreml
     #[argh(option, default = "String::from(\"cpu:0\")")]
     pub device: String,
 

@@ -82,13 +82,13 @@ cargo run --release -- \
 - `--object <TYPE>`: Object type to detect - `faces`, `heads`, `football`, `sports ball`, `frisbee`, `person`, `car`, `truck`, or `boat` (default: `faces`)
 
 #### Model Configuration
-- `--device <DEVICE>`: Processing device - `cpu:0`, `cuda:0`, `mps` (default: `cpu:0`)
+- `--device <DEVICE>`: Processing device - `cpu:0`, `cuda:0`, `coreml` (default: `cpu:0`)
 - `--scale <SCALE>`: Model scale - `n`, `s`, `m`, `l` (default: `m`)
 - `--dtype <DTYPE>`: Model data type - `auto`, `f32`, `f16` (default: `auto`)
-- `--ver <VERSION>`: YOLO version (default: `8.0`)
+- `--ver <VERSION>`: YOLO version (default: `11.0`)
 
 #### Cropping Options
-- `--use-stack-crop`: Enable stacked crop mode for wide scenes
+- `--use-stack-crop`: Enable stacked crop mode for interviews with 2 people
 - `--smooth-percentage <FLOAT>`: Smoothing threshold percentage (default: `10.0`)
 - `--smooth-duration <INT>`: Smoothing duration in frames (default: `45`)
 
@@ -156,8 +156,10 @@ export OPENAI_API_KEY="your-api-key-here"
 The tool automatically selects the appropriate model based on the `--object`, `--ver`, and `--scale` parameters. Available models in the `model/` directory include:
 
 #### Face Detection Models
+- `yolov6m-face.onnx` (v6 medium)
 - `yolov6n-face.onnx` (v6 nano)
-- `yolov8m-face.onnx` (v8 medium) - default
+- `yolov8l-face.onnx` (v8 large)
+- `yolov8m-face.onnx` (v8 medium)
 - `yolov8n-face.onnx` (v8 nano)
 - `yolov10n-face.onnx` (v10 nano)
 - `yolov10s-face.onnx` (v10 small)
@@ -165,7 +167,7 @@ The tool automatically selects the appropriate model based on the `--object`, `-
 - `yolov10l-face.onnx` (v10 large)
 - `yolov11n-face.onnx` (v11 nano)
 - `yolov11s-face.onnx` (v11 small)
-- `yolov11m-face.onnx` (v11 medium)
+- `yolov11m-face.onnx` (v11 medium) - default
 - `yolov11l-face.onnx` (v11 large)
 
 #### Head Detection Models
@@ -176,7 +178,7 @@ The tool automatically selects the appropriate model based on the `--object`, `-
 - `yolov8m-football.onnx` (v8 medium)
 
 #### Other Objects
-For other objects like `person`, `car`, `truck`, `boat`, `sports ball`, `frisbee`, the tool uses the standard COCO-80 model with class filtering.
+For other objects like `person`, `car`, `truck`, `boat`, `sports ball`, `frisbee`, the tool downloads the standard COCO-80 yolo model with class filtering.
 
 ## Examples
 
@@ -192,7 +194,7 @@ cargo run --release -- \
   --smooth-duration 60
 ```
 
-### Process a wide group shot with stacked crops
+### Process a two person interview with stacked crops
 ```bash
 cargo run --release -- \
   --object faces \
@@ -243,7 +245,7 @@ cargo run --release -- \
 
 ## Performance Tips
 
-- **GPU Acceleration**: Use `--device cuda:0` for faster processing
+- **GPU Acceleration**: Use `--device cuda:0` or `--device coreml` for faster processing
 - **Model Size**: Larger models (`--scale l`) provide better accuracy but slower processing
 - **Headless Mode**: Use `--headless` for faster processing without GUI overhead
 
