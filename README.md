@@ -1,6 +1,6 @@
 # Land2Port
 
-A powerful video processing tool that automatically detects heads in videos, crops them to portrait format (9:16 aspect ratio), and adds AI-generated transcriptions. Perfect for converting landscape videos to portrait format for social media platforms like TikTok, Instagram Reels, and YouTube Shorts.
+A powerful video processing tool that automatically detects faces (or heads) in videos, crops them to portrait format (9:16 aspect ratio), and adds AI-generated transcriptions. Perfect for converting landscape videos to portrait format for social media platforms like TikTok, Instagram Reels, and YouTube Shorts.
 
 ## Features
 
@@ -77,12 +77,13 @@ cargo run --release -- \
 
 #### Input/Output
 - `--source <FILE>`: Input video file (default: `./video/video1.mp4`)
-- `--model <FILE>`: Custom YOLO model file (.onnx) See models in `./models`
+
+#### Object Detection
+- `--object <TYPE>`: Object type to detect - `faces`, `heads`, `football`, `sports ball`, `frisbee`, `person`, `car`, `truck`, or `boat` (default: `faces`)
 
 #### Model Configuration
-- `--task <TASK>`: Detection task - `det`, `seg`, `pose`, `classify`, `obb` (default: `det`)
 - `--device <DEVICE>`: Processing device - `cpu:0`, `cuda:0`, `mps` (default: `cpu:0`)
-- `--scale <SCALE>`: Model scale - `n`, `s`, `m`, `l`, `x` (default: `m`)
+- `--scale <SCALE>`: Model scale - `n`, `s`, `m`, `l` (default: `m`)
 - `--dtype <DTYPE>`: Model data type - `auto`, `f32`, `f16` (default: `auto`)
 - `--ver <VERSION>`: YOLO version (default: `8.0`)
 
@@ -93,13 +94,6 @@ cargo run --release -- \
 
 #### Processing Options
 - `--headless`: Run without GUI display
-- `--batch-size <INT>`: Batch size for processing (default: `1`)
-- `--image-width <INT>`: Input image width (default: `640`)
-- `--image-height <INT>`: Input image height (default: `640`)
-
-#### Detection Options
-- `--confs <FLOAT...>`: Confidence thresholds (default: `[0.2, 0.15]`)
-- `--topk <INT>`: Top-k detections (default: `5`)
 
 ## How It Works
 
@@ -159,24 +153,39 @@ export OPENAI_API_KEY="your-api-key-here"
 
 ### Model Files
 
-Place YOLO model files in the `model/` directory. The tool includes several pre-trained models for face detection:
-- `yolov10n-face.onnx` (nano)
-- `yolov10s-face.onnx` (small)
-- `yolov10m-face.onnx` (medium)
-- `yolov10l-face.onnx` (large)
+The tool automatically selects the appropriate model based on the `--object`, `--ver`, and `--scale` parameters. Available models in the `model/` directory include:
+
+#### Face Detection Models
+- `yolov6n-face.onnx` (v6 nano)
+- `yolov8m-face.onnx` (v8 medium) - default
+- `yolov8n-face.onnx` (v8 nano)
+- `yolov10n-face.onnx` (v10 nano)
+- `yolov10s-face.onnx` (v10 small)
+- `yolov10m-face.onnx` (v10 medium)
+- `yolov10l-face.onnx` (v10 large)
 - `yolov11n-face.onnx` (v11 nano)
 - `yolov11s-face.onnx` (v11 small)
 - `yolov11m-face.onnx` (v11 medium)
 - `yolov11l-face.onnx` (v11 large)
+
+#### Head Detection Models
 - `v8-head-fp16.onnx` (v8 head detection)
+
+#### Football Detection Models
+- `yolov8n-football.onnx` (v8 nano)
+- `yolov8m-football.onnx` (v8 medium)
+
+#### Other Objects
+For other objects like `person`, `car`, `truck`, `boat`, `sports ball`, `frisbee`, the tool uses the standard COCO-80 model with class filtering.
 
 ## Examples
 
 ### Convert a landscape interview to portrait
 ```bash
 cargo run --release -- \
-  --model ./models/yolov11s-face.onnx \ 
-  --version 11.0 \
+  --object faces \
+  --ver 11.0 \
+  --scale s \
   --source interview.mp4 \
   --headless \
   --smooth-percentage 5.0 \
@@ -186,8 +195,9 @@ cargo run --release -- \
 ### Process a wide group shot with stacked crops
 ```bash
 cargo run --release -- \
-  --model ./models/yolov11s-face.onnx \ 
-  --version 11.0 \
+  --object faces \
+  --ver 11.0 \
+  --scale s \
   --source group_shot.mp4 \
   --headless \
   --use-stack-crop \
@@ -197,21 +207,44 @@ cargo run --release -- \
 ### High-quality processing with GPU acceleration
 ```bash
 cargo run --release -- \
-  --model ./models/yolov11s-face.onnx \ 
-  --version 11.0 \
+  --object faces \
+  --ver 11.0 \
+  --scale l \
   --source high_quality.mp4 \
   --device cuda:0 \
-  --scale l \
-  --image-width 1920 \
-  --image-height 1080 \
+  --headless
+```
+
+### Detect football/soccer balls
+```bash
+cargo run --release -- \
+  --object football \
+  --ver 8.0 \
+  --scale m \
+  --source football_match.mp4 \
+  --headless
+```
+
+### Detect heads instead of faces
+```bash
+cargo run --release -- \
+  --object heads \
+  --source interview.mp4 \
+  --headless
+```
+
+### Detect other objects (person, car, etc.)
+```bash
+cargo run --release -- \
+  --object person \
+  --source street_scene.mp4 \
   --headless
 ```
 
 ## Performance Tips
 
 - **GPU Acceleration**: Use `--device cuda:0` for faster processing
-- **Model Size**: Larger models (`--scale l` or `--scale x`) provide better accuracy but slower processing
-- **Batch Size**: Increase `--batch-size` for faster processing if you have sufficient memory
+- **Model Size**: Larger models (`--scale l`) provide better accuracy but slower processing
 - **Headless Mode**: Use `--headless` for faster processing without GUI overhead
 
 ## Troubleshooting
@@ -220,7 +253,7 @@ cargo run --release -- \
 
 1. **ffmpeg not found**: Install ffmpeg and ensure it's in your PATH
 2. **CUDA errors**: Ensure CUDA drivers and toolkit are properly installed
-3. **Memory issues**: Reduce batch size or image dimensions
+3. **Memory issues**: Try using a smaller model scale (`--scale n` or `--scale s`)
 4. **Transcription fails**: Check your OpenAI API key and internet connection
 
 ### Debug Mode
@@ -252,7 +285,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - [USLS](https://github.com/paulingalls/usls) - Computer vision library
 - [OpenAI Whisper](https://openai.com/research/whisper) - Speech recognition
-- [YOLO](https://github.com/ultralytics/yolov5) - Object detection models
+- [YOLO](https://github.com/ultralytics/ultralytics) - Object detection models
+- [YOLO-Face](https://github.com/akanametov/yolo-face) - Yolo Face detection
+- [YOLO-Football](https://github.com/noorkhokhar99/YOLOv8-football) - Yolo for football (soccer)
 
 ## Support
 
@@ -263,4 +298,4 @@ If you encounter any issues or have questions, please:
 
 ---
 
-**Made with ❤️ for content creators** 
+**Made with ❤️ for content creators**
