@@ -5,7 +5,7 @@ use crate::cli::Args;
 /// Determines the model file path based on object type, version, and scale
 fn get_model_path(object: &str, ver: f32, scale: &str) -> String {
     match object {
-        "faces" => {
+        "face" => {
             // Check if version and scale are supported for faces
             let supported_versions = [6.0, 8.0, 10.0, 11.0];
             let supported_scales = ["n", "s", "m", "l"];
@@ -17,8 +17,8 @@ fn get_model_path(object: &str, ver: f32, scale: &str) -> String {
                 "./model/yolov8m-face.onnx".to_string()
             }
         }
-        "heads" => "./model/v8-head-fp16.onnx".to_string(),
-        "football" => {
+        "head" => "./model/v8-head-fp16.onnx".to_string(),
+        "ball" => {
             match scale {
                 "m" => "./model/yolov8m-football.onnx".to_string(),
                 "n" => "./model/yolov8n-football.onnx".to_string(),
@@ -66,22 +66,21 @@ mod tests {
     #[test]
     fn test_get_model_path() {
         // Test faces with different versions and scales
-        assert_eq!(get_model_path("faces", 8.0, "m"), "./model/yolov8m-face.onnx");
-        assert_eq!(get_model_path("faces", 10.0, "s"), "./model/yolov10s-face.onnx");
-        assert_eq!(get_model_path("faces", 11.0, "l"), "./model/yolov11l-face.onnx");
-        assert_eq!(get_model_path("faces", 6.0, "n"), "./model/yolov6n-face.onnx");
+        assert_eq!(get_model_path("face", 8.0, "m"), "./model/yolov8m-face.onnx");
+        assert_eq!(get_model_path("face", 10.0, "s"), "./model/yolov10s-face.onnx");
+        assert_eq!(get_model_path("face", 11.0, "l"), "./model/yolov11l-face.onnx");
+        assert_eq!(get_model_path("face", 6.0, "n"), "./model/yolov6n-face.onnx");
         
         // Test unsupported combination defaults to yolov8m-face.onnx
-        assert_eq!(get_model_path("faces", 9.0, "m"), "./model/yolov8m-face.onnx");
-        assert_eq!(get_model_path("faces", 8.0, "x"), "./model/yolov8m-face.onnx");
+        assert_eq!(get_model_path("face", 9.0, "m"), "./model/yolov8m-face.onnx");
+        assert_eq!(get_model_path("face", 8.0, "x"), "./model/yolov8m-face.onnx");
         
         // Test heads
-        assert_eq!(get_model_path("heads", 8.0, "m"), "./model/v8-head-fp16.onnx");
+        assert_eq!(get_model_path("head", 8.0, "m"), "./model/v8-head-fp16.onnx");
         
         // Test football
-        assert_eq!(get_model_path("football", 8.0, "m"), "./model/yolov8m-football.onnx");
-        assert_eq!(get_model_path("football", 8.0, "n"), "./model/yolov8n-football.onnx");
-        assert_eq!(get_model_path("football", 8.0, "s"), "./model/yolov8n-football.onnx"); // Defaults to n
+        assert_eq!(get_model_path("ball", 8.0, "m"), "./model/yolov8m-football.onnx");
+        assert_eq!(get_model_path("ball", 8.0, "n"), "./model/yolov8n-football.onnx");
         
         // Test other object types
         assert_eq!(get_model_path("person", 8.0, "m"), "");

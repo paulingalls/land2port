@@ -1,8 +1,8 @@
 use anyhow::Result;
 use chrono::Local;
+use std::env;
 use std::fs;
 use std::path::Path;
-use std::env;
 use usls::{
     Annotator, DataLoader, Hbb, SKELETON_COCO_19, SKELETON_COLOR_COCO_19, Style, Viewer, Y,
     models::YOLO,
@@ -18,7 +18,9 @@ mod transcript;
 
 /// Helper function to check if debug logging is enabled
 fn is_debug_enabled() -> bool {
-    env::var("RUST_LOG").map(|val| val.to_lowercase() == "debug").unwrap_or(false)
+    env::var("RUST_LOG")
+        .map(|val| val.to_lowercase() == "debug")
+        .unwrap_or(false)
 }
 
 /// Debug print function that only prints when RUST_LOG=debug
@@ -72,15 +74,29 @@ fn process_and_display_crop(
 }
 
 /// Extracts head detections above the probability threshold from YOLO detection results
-fn extract_heads_above_threshold(detection: &Y, head_prob_threshold: f32) -> Vec<&Hbb> {
+fn extract_objects_above_threshold<'a>(
+    detection: &'a Y,
+    object_name: &str,
+    object_prob_threshold: f32,
+) -> Vec<&'a Hbb> {
     if let Some(hbbs) = detection.hbbs() {
         hbbs.iter()
             .filter(|hbb| {
-                if let Some(confidence) = hbb.confidence() {
-                    confidence >= head_prob_threshold
+                // Check confidence threshold
+                let meets_threshold = if let Some(confidence) = hbb.confidence() {
+                    confidence >= object_prob_threshold
                 } else {
                     false
-                }
+                };
+
+                // Check name matching
+                let matches_name = if let Some(name) = hbb.name() {
+                    name == object_name
+                } else {
+                    false
+                };
+
+                meets_threshold && matches_name
             })
             .collect()
     } else {
@@ -186,7 +202,7 @@ async fn main() -> Result<()> {
             };
 
             // Calculate crop areas based on the detection results
-            let heads = extract_heads_above_threshold(y, 0.7); // head probability threshold
+            let heads = extract_objects_above_threshold(y, &args.object, args.object_prob_threshold); // object probability threshold
             let current_head_count = heads.len();
             let latest_crop = crop::calculate_crop_area(
                 args.use_stack_crop,
@@ -205,96 +221,117 @@ async fn main() -> Result<()> {
                 current_head_count, previous_head_count
             ));
 
-            // Compare with previous crop if it exists
-            let mut head_count = current_head_count;
-            let crop_result: Option<crop::CropResult> = if let Some(prev_crop) = &previous_crop {
-                let is_same_class =
-                    crop::is_crop_class_same(current_head_count, previous_head_count);
-                let is_latest_crop_similar = is_crop_similar(
-                    &latest_crop,
-                    prev_crop,
-                    img.width() as f32,
-                    args.smooth_percentage,
-                );
+            if args.smooth_duration > 0 {
+                // Compare with previous crop if it exists
+                let mut head_count = current_head_count;
+                let crop_result: Option<crop::CropResult> = if let Some(prev_crop) = &previous_crop
+                {
+                    let is_same_class =
+                        crop::is_crop_class_same(current_head_count, previous_head_count);
+                    let is_latest_crop_similar = is_crop_similar(
+                        &latest_crop,
+                        prev_crop,
+                        img.width() as f32,
+                        args.smooth_percentage,
+                    );
 
-                if is_same_class && is_latest_crop_similar {
-                    debug_println(format_args!("is_same_class && is_latest_crop_similar"));
-                    if !history.is_empty() {
-                        while let Some(frame) = history.pop_front() {
-                            process_and_display_crop(
-                                &frame.image,
-                                &prev_crop,
-                                &mut viewer,
-                                args.headless,
-                            )?;
-                        }
-                    }
-                    head_count = previous_head_count;
-                    Some(prev_crop.clone())
-                } else {
-                    let mut crop_result: Option<crop::CropResult> = None;
-                    if history.is_empty() {
-                        history.add(latest_crop.clone(), img.clone(), current_head_count);
-                    } else {
-                        let change_crop = history.peek_front().unwrap().crop.clone();
-                        let change_head_count = history.peek_front().unwrap().head_count;
-                        debug_println(format_args!("change_crop: {:?}", change_crop));
-                        debug_println(format_args!("change_head_count: {:?}", change_head_count));
-                        let is_change_crop_similar = is_crop_similar(
-                            &latest_crop,
-                            &change_crop,
-                            img.width() as f32,
-                            args.smooth_percentage,
-                        );
-                        let is_change_head_count_similar =
-                            crop::is_crop_class_same(current_head_count, change_head_count);
-                        debug_println(format_args!("is_change_crop_similar: {:?}", is_change_crop_similar));
-                        debug_println(format_args!("is_change_head_count_similar: {:?}", is_change_head_count_similar));
-
-                        if is_change_crop_similar && is_change_head_count_similar {
-                            if history.len() == args.smooth_duration {
-                                while let Some(frame) = history.pop_front() {
-                                    process_and_display_crop(
-                                        &frame.image,
-                                        &change_crop,
-                                        &mut viewer,
-                                        args.headless,
-                                    )?;
-                                }
-                                head_count = change_head_count;
-                                crop_result = Some(change_crop);
-                            } else {
-                                history.add(change_crop.clone(), img.clone(), change_head_count);
-                            }
-                        } else {
-                            // Choose crop based on whether prev_crop is stacked and change_crop isn't
-                            let crop_to_use = match (&prev_crop, &change_crop) {
-                                (crop::CropResult::Stacked(_, _), crop::CropResult::Single(_)) => &change_crop,
-                                _ => &prev_crop,
-                            };
-                            
+                    if is_same_class && is_latest_crop_similar {
+                        debug_println(format_args!("is_same_class && is_latest_crop_similar"));
+                        if !history.is_empty() {
                             while let Some(frame) = history.pop_front() {
                                 process_and_display_crop(
                                     &frame.image,
-                                    crop_to_use,
+                                    &prev_crop,
                                     &mut viewer,
                                     args.headless,
                                 )?;
                             }
-                            history.add(latest_crop.clone(), img.clone(), current_head_count);
                         }
+                        head_count = previous_head_count;
+                        Some(prev_crop.clone())
+                    } else {
+                        let mut crop_result: Option<crop::CropResult> = None;
+                        if history.is_empty() {
+                            history.add(latest_crop.clone(), img.clone(), current_head_count);
+                        } else {
+                            let change_crop = history.peek_front().unwrap().crop.clone();
+                            let change_head_count = history.peek_front().unwrap().head_count;
+                            debug_println(format_args!("change_crop: {:?}", change_crop));
+                            debug_println(format_args!(
+                                "change_head_count: {:?}",
+                                change_head_count
+                            ));
+                            let is_change_crop_similar = is_crop_similar(
+                                &latest_crop,
+                                &change_crop,
+                                img.width() as f32,
+                                args.smooth_percentage,
+                            );
+                            let is_change_head_count_similar =
+                                crop::is_crop_class_same(current_head_count, change_head_count);
+                            debug_println(format_args!(
+                                "is_change_crop_similar: {:?}",
+                                is_change_crop_similar
+                            ));
+                            debug_println(format_args!(
+                                "is_change_head_count_similar: {:?}",
+                                is_change_head_count_similar
+                            ));
+
+                            if is_change_crop_similar && is_change_head_count_similar {
+                                if history.len() == args.smooth_duration {
+                                    while let Some(frame) = history.pop_front() {
+                                        process_and_display_crop(
+                                            &frame.image,
+                                            &change_crop,
+                                            &mut viewer,
+                                            args.headless,
+                                        )?;
+                                    }
+                                    head_count = change_head_count;
+                                    crop_result = Some(change_crop);
+                                } else {
+                                    history.add(
+                                        change_crop.clone(),
+                                        img.clone(),
+                                        change_head_count,
+                                    );
+                                }
+                            } else {
+                                // Choose crop based on whether prev_crop is stacked and change_crop isn't
+                                let crop_to_use = match (&prev_crop, &change_crop) {
+                                    (
+                                        crop::CropResult::Stacked(_, _),
+                                        crop::CropResult::Single(_),
+                                    ) => &change_crop,
+                                    _ => &prev_crop,
+                                };
+
+                                while let Some(frame) = history.pop_front() {
+                                    process_and_display_crop(
+                                        &frame.image,
+                                        crop_to_use,
+                                        &mut viewer,
+                                        args.headless,
+                                    )?;
+                                }
+                                history.add(latest_crop.clone(), img.clone(), current_head_count);
+                            }
+                        }
+                        crop_result
                     }
-                    crop_result
+                } else {
+                    head_count = current_head_count;
+                    Some(latest_crop)
+                };
+
+                if let Some(crop_result) = crop_result {
+                    previous_crop = Some(crop_result.clone());
+                    previous_head_count = head_count;
+                    process_and_display_crop(&img, &crop_result, &mut viewer, args.headless)?;
                 }
             } else {
-                head_count = current_head_count;
-                Some(latest_crop)
-            };
-
-            if let Some(crop_result) = crop_result {
-                previous_crop = Some(crop_result.clone());
-                previous_head_count = head_count;
-                process_and_display_crop(&img, &crop_result, &mut viewer, args.headless)?;
+                process_and_display_crop(&img, &latest_crop, &mut viewer, args.headless)?;
             }
         }
     }

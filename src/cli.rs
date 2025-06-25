@@ -3,8 +3,8 @@ use argh::FromArgs;
 /// YOLO Example
 #[derive(FromArgs, Debug)]
 pub struct Args {
-    /// object type: faces, heads, football, sports ball, frisbee, person, car, truck, or boat
-    #[argh(option, default = "String::from(\"faces\")")]
+    /// object type: face, head, ball, sports ball, frisbee, person, car, truck, or boat
+    #[argh(option, default = "String::from(\"face\")")]
     pub object: String,
 
     /// source: image, image folder, video stream
@@ -34,6 +34,10 @@ pub struct Args {
     /// smooth duration in frames
     #[argh(option, default = "45")]
     pub smooth_duration: usize,
+
+    /// object probability threshold
+    #[argh(option, default = "0.7")]
+    pub object_prob_threshold: f32,
 
     /// use headless mode
     #[argh(switch)]

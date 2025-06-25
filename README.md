@@ -1,15 +1,15 @@
 # Land2Port
 
-A powerful video processing tool that automatically detects faces (or heads) in videos, crops them to portrait format (9:16 aspect ratio), and adds AI-generated transcriptions. Perfect for converting landscape videos to portrait format for social media platforms like TikTok, Instagram Reels, and YouTube Shorts.
+A powerful video processing tool that automatically detects objects like faces or heads in videos, then crops them to portrait format (9:16 aspect ratio), and adds AI-generated transcriptions. Perfect for converting landscape videos to portrait format for social media platforms like TikTok, Instagram Reels, and YouTube Shorts.
 
 ## Features
 
-- **🎯 Face or Head Detection**: Uses YOLO models to detect faces or heads in video frames with high accuracy
+- **🎯 Object Detection**: Uses YOLO models to detect faces or heads, footballs or cars in video frames with high accuracy
 - **📱 Portrait Cropping**: Automatically crops videos to 9:16 aspect ratio for mobile viewing
 - **🎬 Smart Cropping Logic**: 
-  - Single head: Centers crop on the detected head
-  - Multiple heads: Intelligently positions crops to capture all subjects
-  - Stacked crops when appropriate: Creates two 9:8 crops stacked vertically for 2 or 3-5 heads
+  - Single object: Centers crop on the detected object
+  - Multiple objects: Intelligently positions crops to capture all subjects
+  - Stacked crops when appropriate: Creates two 9:8 crops stacked vertically for 2 or 3-5 objects
 - **🎙️ AI Transcription**: Generates SRT captions using OpenAI Whisper
 - **🎨 Caption Styling**: Customizable caption appearance with fonts, colors, and positioning
 - **⚡ Smooth Transitions**: Prevents jarring crop changes with intelligent smoothing
@@ -64,12 +64,14 @@ cargo run --release -- --source ./video/input.mp4 --headless
 ```bash
 # Process with custom settings
 cargo run --release -- \
+  --object face \
   --source ./video/input.mp4 \
   --headless \
   --use-stack-crop \
   --smooth-percentage 5.0 \
   --smooth-duration 30 \
   --device cuda:0 \
+  --version 11.0 \
   --scale l
 ```
 
@@ -79,7 +81,8 @@ cargo run --release -- \
 - `--source <FILE>`: Input video file (default: `./video/video1.mp4`)
 
 #### Object Detection
-- `--object <TYPE>`: Object type to detect - `faces`, `heads`, `football`, `sports ball`, `frisbee`, `person`, `car`, `truck`, or `boat` (default: `faces`)
+- `--object <TYPE>`: Object type to detect - `face`, `head`, `ball`, `sports ball`, `frisbee`, `person`, `car`, `truck`, or `boat` (default: `face`)
+= `--object-prob-threshold <FLOAT>`: Threshold where object gets included in crop logic (default `0.7`)
 
 #### Model Configuration
 - `--device <DEVICE>`: Processing device - `cpu:0`, `cuda:0`, `coreml` (default: `cpu:0`)
@@ -97,19 +100,29 @@ cargo run --release -- \
 
 ## How It Works
 
-### 1. Head Detection
-The tool uses YOLO models to detect heads in each video frame. It filters detections by confidence threshold to ensure accuracy.
+### 1. Object Detection
+The tool uses selected YOLO models to detect objects in each video frame. It filters detections by confidence threshold to ensure accuracy.
+Use the `--object` param to select which type of object to detect.  Current options:
+- **face**: Detects faces
+- **head**: Detects heads
+- **person**: Detects people
+- **ball**: Detects footballs (soccer balls)
+- **sports ball**: Detects sport balls
+- **frisbee**: Detects frisbees
+- **car**: Detects cars
+- **truck**: Detects trucks
+- **boat**: Detects boats
 
 ### 2. Crop Calculation
-Based on the number of detected heads, the tool calculates optimal crop areas:
+Based on the number of detected objects, the tool calculates optimal crop areas:
 
-- **0 heads**: Centered crop with 3:4 aspect ratio
-- **1 head**: Crop centered on the detected head
-- **2 heads**: 
-  - If heads are close: Single crop containing both
-  - If heads are far apart: Two stacked crops (when `--use-stack-crop` is enabled)
-- **3-5 heads**: Similar logic to 2 heads
-- **6+ heads**: Crop based on the largest detected head
+- **0 objects**: Centered crop with 3:4 aspect ratio
+- **1 objects**: Crop centered on the detected object
+- **2 objects**: 
+  - If objects are close: Single crop containing both
+  - If objects are far apart: Two stacked crops (when `--use-stack-crop` is enabled)
+- **3-5 objects**: Similar logic to 2 objects
+- **6+ objects**: Crop based on the largest detected object
 
 ### 3. Smoothing
 To prevent jarring transitions, the tool implements intelligent smoothing:
@@ -185,7 +198,7 @@ For other objects like `person`, `car`, `truck`, `boat`, `sports ball`, `frisbee
 ### Convert a landscape interview to portrait
 ```bash
 cargo run --release -- \
-  --object faces \
+  --object face \
   --ver 11.0 \
   --scale s \
   --source interview.mp4 \
@@ -197,7 +210,7 @@ cargo run --release -- \
 ### Process a two person interview with stacked crops
 ```bash
 cargo run --release -- \
-  --object faces \
+  --object face \
   --ver 11.0 \
   --scale s \
   --source group_shot.mp4 \
@@ -209,7 +222,7 @@ cargo run --release -- \
 ### High-quality processing with GPU acceleration
 ```bash
 cargo run --release -- \
-  --object faces \
+  --object face \
   --ver 11.0 \
   --scale l \
   --source high_quality.mp4 \
@@ -220,7 +233,7 @@ cargo run --release -- \
 ### Detect football/soccer balls
 ```bash
 cargo run --release -- \
-  --object football \
+  --object ball \
   --ver 8.0 \
   --scale m \
   --source football_match.mp4 \
@@ -230,7 +243,7 @@ cargo run --release -- \
 ### Detect heads instead of faces
 ```bash
 cargo run --release -- \
-  --object heads \
+  --object head \
   --source interview.mp4 \
   --headless
 ```
