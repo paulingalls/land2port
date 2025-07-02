@@ -120,6 +120,28 @@ pub fn create_cropped_image(
     }
 }
 
+/// Determines if there is a cut between two images by comparing their similarity
+///
+/// # Arguments
+/// * `image1` - The first image to compare
+/// * `image2` - The second image to compare
+///
+/// # Returns
+/// `true` if the similarity is less than 0.5 (indicating a cut), `false` otherwise
+pub fn is_cut(image1: &Image, image2: &Image) -> Result<bool> {
+    // Convert both images to RgbImage for comparison
+    let rgb1 = image1.to_rgb8();
+    let rgb2 = image2.to_rgb8();
+    
+    // Use rgb_image_compare to get the similarity score
+    let similarity = image_compare::rgb_hybrid_compare(&rgb1, &rgb2)?;
+
+    println!("similarity: {:?}", similarity.score);
+    
+    // Return true if similarity is less than 0.4 (indicating a cut)
+    Ok(similarity.score < 0.4)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -196,5 +218,41 @@ mod tests {
         // Verify dimensions
         assert_eq!(cropped.width(), 1080);
         assert_eq!(cropped.height(), 1920); // Combined height of both crops
+    }
+
+    #[test]
+    fn test_is_cut() {
+        // Create two identical images
+        let mut rgb_image1 = RgbImage::new(100, 100);
+        let mut rgb_image2 = RgbImage::new(100, 100);
+        
+        // Fill both with the same pattern
+        for y in 0..100 {
+            for x in 0..100 {
+                let pixel = image::Rgb([x as u8, y as u8, 128]);
+                rgb_image1.put_pixel(x, y, pixel);
+                rgb_image2.put_pixel(x, y, pixel);
+            }
+        }
+        
+        let image1 = Image::from(rgb_image1);
+        let image2 = Image::from(rgb_image2);
+        
+        // Identical images should not be considered a cut
+        assert!(!is_cut(&image1, &image2).unwrap());
+        
+        // Create a different image
+        let mut rgb_image3 = RgbImage::new(100, 100);
+        for y in 0..100 {
+            for x in 0..100 {
+                let pixel = image::Rgb([255 - x as u8, 255 - y as u8, 128]);
+                rgb_image3.put_pixel(x, y, pixel);
+            }
+        }
+        
+        let image3 = Image::from(rgb_image3);
+        
+        // Different images should be considered a cut
+        assert!(is_cut(&image1, &image3).unwrap());
     }
 }

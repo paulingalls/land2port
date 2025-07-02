@@ -411,6 +411,28 @@ pub fn is_crop_class_same(head_count1: usize, head_count2: usize) -> bool {
     get_crop_class(head_count1) == get_crop_class(head_count2)
 }
 
+/// Checks if two crop results are similar based on a threshold percentage
+pub fn is_crop_similar(
+    crop1: &CropResult,
+    crop2: &CropResult,
+    width: f32,
+    threshold: f32,
+) -> bool {
+    match (crop1, crop2) {
+        (CropResult::Single(crop1), CropResult::Single(crop2)) => {
+            crop1.is_within_percentage(crop2, width, threshold)
+        }
+        (
+            CropResult::Stacked(crop1_1, crop1_2),
+            CropResult::Stacked(crop2_1, crop2_2),
+        ) => {
+            crop1_1.is_within_percentage(crop2_1, width, threshold)
+                && crop1_2.is_within_percentage(crop2_2, width, threshold)
+        }
+        _ => false, // If crop types don't match, use the new crop
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

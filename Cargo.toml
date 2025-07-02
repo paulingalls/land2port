@@ -8,6 +8,7 @@ anyhow = { version = "1" }
 argh = "0.1.13"
 usls = { git = "https://github.com/paulingalls/usls", features=["video", "coreml"] }
 image = "0.25"
+image-compare = "0.4.2"
 openai-api-rs = "6.0.6"
 tokio = { version = "1", features = ["full"] }
 chrono = "0.4.41"

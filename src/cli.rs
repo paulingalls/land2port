@@ -46,4 +46,8 @@ pub struct Args {
     /// enable stack crop
     #[argh(switch)]
     pub use_stack_crop: bool,
+
+    /// use simple smoothing instead of history smoothing
+    #[argh(switch)]
+    pub use_simple_smoothing: bool,
 }
