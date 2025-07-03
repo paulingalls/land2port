@@ -33,6 +33,35 @@ pub fn process_and_display_crop(
     Ok(())
 }
 
+/// Predicts the current HBB position based on the previous two frames
+/// Uses linear extrapolation to estimate where the object will be in the current frame
+///
+/// # Arguments
+/// * `two_frames_ago` - The HBB from two frames ago
+/// * `last_frame` - The HBB from the last frame
+/// * `max_x` - Maximum x coordinate (width of frame)
+/// * `max_y` - Maximum y coordinate (height of frame)
+///
+/// # Returns
+/// A predicted HBB for the current frame, or None if prediction fails
+pub fn predict_current_hbb(two_frames_ago: &Hbb, last_frame: &Hbb, max_x: f32, max_y: f32) -> Hbb {
+    // Calculate velocity (change in position per frame)
+    let dx = last_frame.xmin() - two_frames_ago.xmin();
+    let dy = last_frame.ymin() - two_frames_ago.ymin();
+
+    // Predict current position by extrapolating the velocity
+    let predicted_x = last_frame.xmin() + dx;
+    let predicted_y = last_frame.ymin() + dy;
+        
+    // Create a new HBB with the predicted values using center coordinates
+    Hbb::from_xywh(
+        predicted_x.max(0.0).min(max_x),
+        predicted_y.max(0.0).min(max_y),
+        last_frame.width(),
+        last_frame.height(),
+    )
+}
+
 /// Extracts head detections above the probability threshold from YOLO detection results
 pub fn extract_objects_above_threshold<'a>(
     detection: &'a Y,

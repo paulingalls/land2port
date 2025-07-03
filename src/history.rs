@@ -6,7 +6,7 @@ use crate::crop::CropResult;
 pub struct FrameData {
     pub crop: CropResult,
     pub image: Image,
-    pub head_count: usize,
+    pub object_count: usize,
 }
 
 /// A structure to maintain a history of frame data
@@ -21,8 +21,8 @@ impl CropHistory {
     }
 
     /// Add a new frame to the history
-    pub fn add(&mut self, crop: CropResult, image: Image, head_count: usize) {
-        self.frames.push(FrameData { crop, image, head_count });
+    pub fn add(&mut self, crop: CropResult, image: Image, object_count: usize) {
+        self.frames.push(FrameData { crop, image, object_count });
     }
 
     /// Remove and return the first frame from the history

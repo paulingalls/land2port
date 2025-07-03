@@ -3,8 +3,10 @@ use chrono::Local;
 use std::fs;
 use std::path::Path;
 use usls::{Annotator, DataLoader, Style, Viewer, models::YOLO};
+use crate::video_processor::VideoProcessor;
 
 mod audio;
+mod ball_video_processor;
 mod cli;
 mod config;
 mod crop;
@@ -13,6 +15,7 @@ mod image;
 mod transcript;
 mod history_smoothing_video_processor;
 mod simple_smoothing_video_processor;
+mod video_processor;
 mod video_processor_utils;
 
 /// Creates a timestamped output directory and returns its path
@@ -84,7 +87,11 @@ async fn main() -> Result<()> {
                 .with_palette(&usls::Color::palette_coco_80()),
         );
 
-    if args.use_simple_smoothing {
+    // Choose processor based on object type and smoothing preference
+    if args.object == "ball" {
+        let mut processor = ball_video_processor::BallVideoProcessor::new();
+        processor.process_video(&args, &mut model, &mut viewer, &data_loader, annotator)?;
+    } else if args.use_simple_smoothing {
         let mut processor = simple_smoothing_video_processor::SimpleSmoothingVideoProcessor::new();
         processor.process_video(&args, &mut model, &mut viewer, &data_loader, annotator)?;
     } else {
