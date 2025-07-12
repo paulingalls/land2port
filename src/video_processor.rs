@@ -1,22 +1,59 @@
 use crate::cli::Args;
+use crate::config;
 use crate::crop;
 use crate::video_processor_utils;
 use anyhow::Result;
-use usls::{Annotator, DataLoader, Viewer, models::YOLO};
+use ndarray::Axis;
+use usls::{
+    Annotator, Config, DType, DataLoader, Style, Viewer,
+    models::{Clip, YOLO},
+};
 
 /// Base trait for video processors that handle cropping with different smoothing strategies
 pub trait VideoProcessor {
     /// Processes a video with cropping and smoothing
-    fn process_video(
-        &mut self,
-        args: &Args,
-        model: &mut YOLO,
-        viewer: &mut Viewer,
-        data_loader: &DataLoader,
-        annotator: Annotator,
-    ) -> Result<()> {
+    fn process_video(&mut self, args: &Args, processed_video: &str) -> Result<()> {
+        let config = config::build_config(&args)?;
+        let mut model = YOLO::new(config.commit()?)?;
+
+        let clip_config = Config::mobileclip_s0()
+            .with_dtype_all(DType::Fp16)
+            .with_device_all(args.device.parse()?)
+            .commit()?;
+        let mut clip_model = Clip::new(clip_config)?;
+        let texts = vec![
+            "a realistic image",
+            "a photographic image",
+            "an image of a person",
+            "an image of multiple people",
+            "an image of a text document",
+            "an image of graphics",
+            "an image of figures",
+            "an image of diagrams",
+        ];
+        let feats_text = clip_model.encode_texts(&texts)?.norm(1)?;
+
+        // build dataloader
+        let data_loader = DataLoader::new(&args.source)?
+            .with_batch(model.batch() as _)
+            .build()?;
+
+        let mut viewer = Viewer::default()
+            .with_window_scale(0.5)
+            .with_fps(data_loader.frame_rate() as usize)
+            .with_saveout(processed_video.to_string());
+
+        // build annotator
+        let annotator = Annotator::default()
+            .with_obb_style(Style::obb().with_draw_fill(true))
+            .with_hbb_style(
+                Style::hbb()
+                    .with_draw_fill(true)
+                    .with_palette(&usls::Color::palette_coco_80()),
+            );
+
         // Common video processing logic
-        for xs in data_loader {
+        for images in data_loader {
             if viewer.is_window_exist() && !viewer.is_window_open() {
                 break;
             }
@@ -28,18 +65,40 @@ pub trait VideoProcessor {
                 }
             }
 
-            let ys = model.forward(&xs)?;
+            let detections = model.forward(&images)?;
 
-            for (x, y) in xs.iter().zip(ys.iter()) {
+            for (image, detection) in images.iter().zip(detections.iter()) {
                 let img = if !args.headless {
-                    annotator.annotate(x, y)?
+                    annotator.annotate(image, detection)?
                 } else {
-                    x.clone()
+                    image.clone()
+                };
+
+                let is_graphic = if args.keep_graphic {
+                    let feats_image = clip_model.encode_images(&[image.clone()])?.norm(1)?;
+
+                    // use image to query texts
+                    let matrix = (feats_image * 100.).dot2(&feats_text)?.softmax(1)?;
+                    let mut id = 0;
+                    let mut score = 0.0;
+                    for (_i, row) in matrix.axis_iter(Axis(0)).enumerate() {
+                        let (item_id, &item_score) = row
+                            .iter()
+                            .enumerate()
+                            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+                            .unwrap();
+                        id = item_id;
+                        score = item_score;
+                        println!("({}) <=> ({})", item_score * 100.0, &texts[item_id]);
+                    }
+                    id > 3 && score > 0.7
+                } else {
+                    false
                 };
 
                 // Calculate crop areas based on the detection results
                 let objects = video_processor_utils::extract_objects_above_threshold(
-                    y,
+                    detection,
                     &args.object,
                     args.object_prob_threshold,
                 );
@@ -51,7 +110,7 @@ pub trait VideoProcessor {
                 )?;
 
                 // Print debug information
-                self.print_debug_info(&objects, &latest_crop);
+                self.print_debug_info(&objects, &latest_crop, is_graphic);
 
                 if args.smooth_duration > 0 {
                     self.process_frame_with_smoothing(
@@ -59,18 +118,22 @@ pub trait VideoProcessor {
                         &latest_crop,
                         &objects,
                         args,
-                        viewer,
+                        &mut viewer,
                     )?;
                 } else {
                     video_processor_utils::process_and_display_crop(
                         &img,
                         &latest_crop,
-                        viewer,
+                        &mut viewer,
                         args.headless,
                     )?;
                 }
             }
         }
+        viewer.finalize_video()?;
+        // summary
+        model.summary();
+
         Ok(())
     }
 
@@ -85,9 +148,12 @@ pub trait VideoProcessor {
     ) -> Result<()>;
 
     /// Prints debug information (can be overridden by concrete processors)
-    fn print_debug_info(&self, objects: &[&usls::Hbb], latest_crop: &crop::CropResult) {
-        video_processor_utils::debug_println(format_args!("--------------------------------"));
-        video_processor_utils::debug_println(format_args!("objects: {:?}", objects));
-        video_processor_utils::debug_println(format_args!("latest_crop: {:?}", latest_crop));
+    fn print_debug_info(
+        &self,
+        objects: &[&usls::Hbb],
+        latest_crop: &crop::CropResult,
+        is_graphic: bool,
+    ) {
+        video_processor_utils::print_default_debug_info(objects, latest_crop, is_graphic);
     }
-} 
+}

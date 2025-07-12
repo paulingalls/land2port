@@ -33,25 +33,33 @@ pub fn process_and_display_crop(
     Ok(())
 }
 
-/// Predicts the current HBB position based on the previous two frames
-/// Uses linear extrapolation to estimate where the object will be in the current frame
+/// Predicts the current HBB position based on the previous three frames
+/// Uses velocity and acceleration to estimate where the object will be in the current frame
 ///
 /// # Arguments
+/// * `three_frames_ago` - The HBB from three frames ago
 /// * `two_frames_ago` - The HBB from two frames ago
 /// * `last_frame` - The HBB from the last frame
 /// * `max_x` - Maximum x coordinate (width of frame)
 /// * `max_y` - Maximum y coordinate (height of frame)
 ///
 /// # Returns
-/// A predicted HBB for the current frame, or None if prediction fails
-pub fn predict_current_hbb(two_frames_ago: &Hbb, last_frame: &Hbb, max_x: f32, max_y: f32) -> Hbb {
-    // Calculate velocity (change in position per frame)
-    let dx = last_frame.xmin() - two_frames_ago.xmin();
-    let dy = last_frame.ymin() - two_frames_ago.ymin();
-
-    // Predict current position by extrapolating the velocity
-    let predicted_x = last_frame.xmin() + dx;
-    let predicted_y = last_frame.ymin() + dy;
+/// A predicted HBB for the current frame
+pub fn predict_current_hbb(three_frames_ago: &Hbb, two_frames_ago: &Hbb, last_frame: &Hbb, max_x: f32, max_y: f32) -> Hbb {
+    // Calculate velocities between consecutive frames
+    let v1_x = two_frames_ago.xmin() - three_frames_ago.xmin();
+    let v1_y = two_frames_ago.ymin() - three_frames_ago.ymin();
+    let v2_x = last_frame.xmin() - two_frames_ago.xmin();
+    let v2_y = last_frame.ymin() - two_frames_ago.ymin();
+    
+    // Calculate acceleration (change in velocity)
+    let ax = v2_x - v1_x;
+    let ay = v2_y - v1_y;
+    
+    // Predict current position using velocity + acceleration
+    // Position = last_position + velocity + 0.5 * acceleration
+    let predicted_x = last_frame.xmin() + v2_x + 0.5 * ax;
+    let predicted_y = last_frame.ymin() + v2_y + 0.5 * ay;
         
     // Create a new HBB with the predicted values using center coordinates
     Hbb::from_xywh(
@@ -60,6 +68,14 @@ pub fn predict_current_hbb(two_frames_ago: &Hbb, last_frame: &Hbb, max_x: f32, m
         last_frame.width(),
         last_frame.height(),
     )
+}
+
+/// Prints the default debug information for video processors
+pub fn print_default_debug_info(objects: &[&usls::Hbb], latest_crop: &crop::CropResult, is_graphic: bool) {
+    debug_println(format_args!("--------------------------------"));
+    debug_println(format_args!("objects: {:?}", objects));
+    debug_println(format_args!("latest_crop: {:?}", latest_crop));
+    debug_println(format_args!("is_graphic: {:?}", is_graphic));
 }
 
 /// Extracts head detections above the probability threshold from YOLO detection results

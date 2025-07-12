@@ -165,11 +165,8 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
     }
 
     /// Override debug info to include history-specific information
-    fn print_debug_info(&self, objects: &[&usls::Hbb], latest_crop: &crop::CropResult) {
-        let current_object_count = objects.len();
-        video_processor_utils::debug_println(format_args!("--------------------------------"));
-        video_processor_utils::debug_println(format_args!("objects: {:?}", objects));
-        video_processor_utils::debug_println(format_args!("latest_crop: {:?}", latest_crop));
+    fn print_debug_info(&self, objects: &[&usls::Hbb], latest_crop: &crop::CropResult, is_graphic: bool) {
+        video_processor_utils::print_default_debug_info(objects, latest_crop, is_graphic);
         video_processor_utils::debug_println(format_args!(
             "previous_crop: {:?}",
             self.previous_crop
@@ -180,7 +177,7 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
         ));
         video_processor_utils::debug_println(format_args!(
             "current_object_count: {}, previous_object_count: {}",
-            current_object_count, self.previous_object_count
+            objects.len(), self.previous_object_count
         ));
     }
 }

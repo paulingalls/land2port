@@ -2,7 +2,6 @@ use anyhow::Result;
 use chrono::Local;
 use std::fs;
 use std::path::Path;
-use usls::{Annotator, DataLoader, Style, Viewer, models::YOLO};
 use crate::video_processor::VideoProcessor;
 
 mod audio;
@@ -29,7 +28,6 @@ fn create_output_dir() -> Result<String> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args: cli::Args = argh::from_env();
-    let config = config::build_config(&args)?;
 
     // Create timestamped output directory
     let output_dir = create_output_dir()?;
@@ -66,40 +64,20 @@ async fn main() -> Result<()> {
     println!("Transcription completed successfully");
 
     // build model
-    let mut model = YOLO::new(config.commit()?)?;
 
-    // build dataloader
-    let data_loader = DataLoader::new(&args.source)?
-        .with_batch(model.batch() as _)
-        .build()?;
-
-    let mut viewer = Viewer::default()
-        .with_window_scale(0.5)
-        .with_fps(data_loader.frame_rate() as usize)
-        .with_saveout(processed_video.clone());
-
-    // build annotator
-    let annotator = Annotator::default()
-        .with_obb_style(Style::obb().with_draw_fill(true))
-        .with_hbb_style(
-            Style::hbb()
-                .with_draw_fill(true)
-                .with_palette(&usls::Color::palette_coco_80()),
-        );
 
     // Choose processor based on object type and smoothing preference
     if args.object == "ball" {
         let mut processor = ball_video_processor::BallVideoProcessor::new();
-        processor.process_video(&args, &mut model, &mut viewer, &data_loader, annotator)?;
+        processor.process_video(&args, &processed_video)?;
     } else if args.use_simple_smoothing {
         let mut processor = simple_smoothing_video_processor::SimpleSmoothingVideoProcessor::new();
-        processor.process_video(&args, &mut model, &mut viewer, &data_loader, annotator)?;
+        processor.process_video(&args, &processed_video)?;
     } else {
         let mut processor = history_smoothing_video_processor::HistorySmoothingVideoProcessor::new();
-        processor.process_video(&args, &mut model, &mut viewer, &data_loader, annotator)?;
+        processor.process_video(&args, &processed_video)?;
     }
 
-    viewer.finalize_video()?;
 
     // Burn captions into the video
     println!("Burning captions into video...");
@@ -119,9 +97,6 @@ async fn main() -> Result<()> {
         "Audio added successfully. Final video saved to: {}",
         final_video
     );
-
-    // summary
-    model.summary();
 
     Ok(())
 }

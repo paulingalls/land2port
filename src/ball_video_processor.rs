@@ -11,6 +11,7 @@ use usls::{Viewer, Hbb};
 pub struct BallVideoProcessor {
     previous_crop: Option<crop::CropResult>,
     most_recent_image: Option<usls::Image>,
+    hbb_three_frames_ago: Option<Hbb>,
     hbb_two_frames_ago: Option<Hbb>,
     hbb_last_frame: Option<Hbb>,
 }
@@ -21,6 +22,7 @@ impl BallVideoProcessor {
         Self {
             previous_crop: None,
             most_recent_image: None,
+            hbb_three_frames_ago: None,
             hbb_two_frames_ago: None,
             hbb_last_frame: None,
         }
@@ -53,6 +55,7 @@ impl VideoProcessor for BallVideoProcessor {
         let crop_result = if is_cut {
             // If there was a cut, use latest_crop
             video_processor_utils::debug_println(format_args!("Cut detected, using latest ball crop"));
+            self.hbb_three_frames_ago = None;
             self.hbb_two_frames_ago = None;
             self.hbb_last_frame = None;
             latest_crop.clone()
@@ -84,6 +87,7 @@ impl VideoProcessor for BallVideoProcessor {
                         &[highest_confidence_ball],
                     )?;
 
+                    self.hbb_three_frames_ago = self.hbb_two_frames_ago.take();
                     self.hbb_two_frames_ago = self.hbb_last_frame.take();
                     self.hbb_last_frame = Some(Hbb::from_cxcywh(
                         highest_confidence_ball.cx(),
@@ -96,25 +100,28 @@ impl VideoProcessor for BallVideoProcessor {
                 } else {
                     // Single ball detected, use latest_crop
                     video_processor_utils::debug_println(format_args!("No cut, single ball detected, using latest ball crop"));
+                    self.hbb_three_frames_ago = self.hbb_two_frames_ago.take();
                     self.hbb_two_frames_ago = self.hbb_last_frame.take();
                     self.hbb_last_frame = Some(objects[0].clone());
                     latest_crop.clone()
                 }
             } else {
                 // If no balls detected, try to predict position or use previous crop
-                if let (Some(two_frames_ago), Some(last_frame)) = (&self.hbb_two_frames_ago, &self.hbb_last_frame) {
-                    let current_hbb = predict_current_hbb(two_frames_ago, last_frame, img.width() as f32, img.height() as f32);
+                if let (Some(three_frames_ago), Some(two_frames_ago), Some(last_frame)) = (&self.hbb_three_frames_ago, &self.hbb_two_frames_ago, &self.hbb_last_frame) {
+                    let current_hbb = predict_current_hbb(three_frames_ago, two_frames_ago, last_frame, img.width() as f32, img.height() as f32);
                     let current_crop = crop::calculate_crop_area(
                         false, // Don't use stack crop for single ball
                         img.width() as f32,
                         img.height() as f32,
                         &[&current_hbb],
                     )?;
+                    self.hbb_three_frames_ago = self.hbb_two_frames_ago.take();
                     self.hbb_two_frames_ago = self.hbb_last_frame.take();
                     self.hbb_last_frame = Some(current_hbb);
                     current_crop
                 } else {
                     // Not enough history for prediction, use previous crop
+                    self.hbb_three_frames_ago = self.hbb_two_frames_ago.take();
                     self.hbb_two_frames_ago = self.hbb_last_frame.take();
                     self.hbb_last_frame = None;
                     if let Some(prev_crop) = &self.previous_crop {
@@ -137,11 +144,10 @@ impl VideoProcessor for BallVideoProcessor {
     }
 
     /// Override debug info to include ball-specific information
-    fn print_debug_info(&self, objects: &[&usls::Hbb], latest_crop: &crop::CropResult) {
-        video_processor_utils::debug_println(format_args!("--------------------------------"));
-        video_processor_utils::debug_println(format_args!("balls: {:?}", objects));
-        video_processor_utils::debug_println(format_args!("latest_crop: {:?}", latest_crop));
+    fn print_debug_info(&self, objects: &[&usls::Hbb], latest_crop: &crop::CropResult, is_graphic: bool) {
+        video_processor_utils::print_default_debug_info(objects, latest_crop, is_graphic);
         video_processor_utils::debug_println(format_args!("previous_crop: {:?}", self.previous_crop));
+        video_processor_utils::debug_println(format_args!("hbb_three_frames_ago: {:?}", self.hbb_three_frames_ago));
         video_processor_utils::debug_println(format_args!("hbb_two_frames_ago: {:?}", self.hbb_two_frames_ago));
         video_processor_utils::debug_println(format_args!("hbb_last_frame: {:?}", self.hbb_last_frame));
     }

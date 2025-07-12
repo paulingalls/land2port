@@ -50,4 +50,8 @@ pub struct Args {
     /// use simple smoothing instead of history smoothing
     #[argh(switch)]
     pub use_simple_smoothing: bool,
+
+    /// keep graphic
+    #[argh(switch)]
+    pub keep_graphic: bool,
 }

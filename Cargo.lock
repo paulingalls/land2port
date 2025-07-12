@@ -1653,6 +1653,7 @@ dependencies = [
  "chrono",
  "image",
  "image-compare",
+ "ndarray",
  "openai-api-rs",
  "tokio",
  "usls",
