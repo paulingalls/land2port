@@ -68,13 +68,13 @@ async fn main() -> Result<()> {
 
     // Choose processor based on object type and smoothing preference
     if args.object == "ball" {
-        let mut processor = ball_video_processor::BallVideoProcessor::new();
+        let mut processor = ball_video_processor::BallVideoProcessor::new(&args);
         processor.process_video(&args, &processed_video)?;
     } else if args.use_simple_smoothing {
         let mut processor = simple_smoothing_video_processor::SimpleSmoothingVideoProcessor::new();
         processor.process_video(&args, &processed_video)?;
     } else {
-        let mut processor = history_smoothing_video_processor::HistorySmoothingVideoProcessor::new();
+        let mut processor = history_smoothing_video_processor::HistorySmoothingVideoProcessor::new(&args);
         processor.process_video(&args, &processed_video)?;
     }
 

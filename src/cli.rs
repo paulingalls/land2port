@@ -39,6 +39,14 @@ pub struct Args {
     #[argh(option, default = "0.7")]
     pub object_prob_threshold: f32,
 
+    /// cut similarity threshold (default: 0.15)
+    #[argh(option, default = "0.15")]
+    pub cut_similarity: f64,
+
+    /// cut start threshold (default: 0.7)
+    #[argh(option, default = "0.7")]
+    pub cut_start: f64,
+
     /// use headless mode
     #[argh(switch)]
     pub headless: bool,
@@ -54,4 +62,8 @@ pub struct Args {
     /// keep graphic
     #[argh(switch)]
     pub keep_graphic: bool,
+
+    /// graphic threshold for CLIP model classification (default: 0.3)
+    #[argh(option, default = "0.3")]
+    pub graphic_threshold: f32,
 }

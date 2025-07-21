@@ -74,7 +74,14 @@ pub trait VideoProcessor {
                     image.clone()
                 };
 
-                let is_graphic = if args.keep_graphic {
+                // Calculate crop areas based on the detection results
+                let objects = video_processor_utils::extract_objects_above_threshold(
+                    detection,
+                    &args.object,
+                    args.object_prob_threshold,
+                );
+
+                let is_graphic = if objects.len() == 0 && args.keep_graphic {
                     let feats_image = clip_model.encode_images(&[image.clone()])?.norm(1)?;
 
                     // use image to query texts
@@ -91,19 +98,14 @@ pub trait VideoProcessor {
                         score = item_score;
                         println!("({}) <=> ({})", item_score * 100.0, &texts[item_id]);
                     }
-                    id > 3 && score > 0.7
+                    id > 3 && score > args.graphic_threshold
                 } else {
                     false
                 };
 
-                // Calculate crop areas based on the detection results
-                let objects = video_processor_utils::extract_objects_above_threshold(
-                    detection,
-                    &args.object,
-                    args.object_prob_threshold,
-                );
                 let latest_crop = crop::calculate_crop_area(
                     args.use_stack_crop,
+                    is_graphic,
                     img.width() as f32,
                     img.height() as f32,
                     &objects,
@@ -130,6 +132,7 @@ pub trait VideoProcessor {
                 }
             }
         }
+        self.finalize_processing(args, &mut viewer)?;
         viewer.finalize_video()?;
         // summary
         model.summary();
@@ -146,6 +149,12 @@ pub trait VideoProcessor {
         args: &Args,
         viewer: &mut Viewer,
     ) -> Result<()>;
+
+    /// Finalizes processing by handling any remaining frames in history (to be implemented by concrete processors)
+    fn finalize_processing(&mut self, _args: &Args, _viewer: &mut Viewer) -> Result<()> {
+        // Default implementation does nothing
+        Ok(())
+    }
 
     /// Prints debug information (can be overridden by concrete processors)
     fn print_debug_info(

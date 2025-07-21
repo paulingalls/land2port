@@ -39,10 +39,6 @@ impl CropHistory {
         self.frames.first()
     }
 
-    pub fn peek_back(&self) -> Option<&FrameData> {
-        self.frames.last()
-    }
-
     /// Get the number of frames in the history
     pub fn len(&self) -> usize {
         self.frames.len()

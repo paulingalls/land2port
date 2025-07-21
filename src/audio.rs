@@ -218,7 +218,6 @@ pub fn compress_to_mp3(input_path: &str, output_path: &str) -> Result<()> {
             "-vn",  // Disable video
             "-acodec", "libmp3lame",  // Use MP3 codec
             "-q:a", "6",  // Set quality (2 is high quality, range is 0-9 where lower is better)
-            "-filter:a", "atempo=2.0",
             output_path,
         ])
         .status()

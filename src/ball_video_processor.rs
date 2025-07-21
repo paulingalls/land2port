@@ -1,6 +1,6 @@
 use crate::cli::Args;
 use crate::crop;
-use crate::image;
+use crate::image::CutDetector;
 use crate::video_processor_utils;
 use crate::video_processor::VideoProcessor;
 use crate::video_processor_utils::predict_current_hbb;
@@ -14,17 +14,19 @@ pub struct BallVideoProcessor {
     hbb_three_frames_ago: Option<Hbb>,
     hbb_two_frames_ago: Option<Hbb>,
     hbb_last_frame: Option<Hbb>,
+    cut_detector: CutDetector,
 }
 
 impl BallVideoProcessor {
     /// Creates a new ball video processor
-    pub fn new() -> Self {
+    pub fn new(args: &Args) -> Self {
         Self {
             previous_crop: None,
             most_recent_image: None,
             hbb_three_frames_ago: None,
             hbb_two_frames_ago: None,
             hbb_last_frame: None,
+            cut_detector: CutDetector::new(args.cut_similarity, args.cut_start),
         }
     }
 }
@@ -43,7 +45,7 @@ impl VideoProcessor for BallVideoProcessor {
         
         // Determine if there was a cut
         let is_cut = if let Some(ref most_recent) = self.most_recent_image {
-            image::is_cut(most_recent, img)?
+            self.cut_detector.is_cut(most_recent, img)?
         } else {
             true
         };
@@ -82,6 +84,7 @@ impl VideoProcessor for BallVideoProcessor {
                     // Create a new crop from just the highest confidence ball
                     let single_ball_crop = crop::calculate_crop_area(
                         false, // Don't use stack crop for single ball
+                        false, // Not graphic mode for ball processing
                         img.width() as f32,
                         img.height() as f32,
                         &[highest_confidence_ball],
@@ -111,6 +114,7 @@ impl VideoProcessor for BallVideoProcessor {
                     let current_hbb = predict_current_hbb(three_frames_ago, two_frames_ago, last_frame, img.width() as f32, img.height() as f32);
                     let current_crop = crop::calculate_crop_area(
                         false, // Don't use stack crop for single ball
+                        false, // Not graphic mode for ball processing
                         img.width() as f32,
                         img.height() as f32,
                         &[&current_hbb],
