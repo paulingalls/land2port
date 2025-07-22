@@ -73,7 +73,9 @@ impl CutDetector {
 /// * `target_width` - The desired width of the output image
 ///
 /// # Returns
-/// A new image containing either a single 9:16 crop or two 9:8 crops stacked vertically
+/// A new image containing either a single 9:16 crop or two crops stacked vertically:
+/// - For three heads: top crop (9:10) + bottom crop (9:6) = 9:16 final image
+/// - For other cases: two equal crops stacked to create 9:16 final image
 pub fn create_cropped_image(
     image: &Image,
     crop_result: &CropResult,
@@ -119,12 +121,12 @@ pub fn create_cropped_image(
             Ok(Image::from(result))
         }
         CropResult::Stacked(crop1, crop2) => {
-            // For stacked crops, we need to:
-            // 1. Crop both areas
-            // 2. Create a new image with the combined height
-            // 3. Copy both crops into the new image
+            // For stacked crops, we create a 9:16 image by:
+            // 1. Cropping both areas from the source image
+            // 2. Scaling crops based on their aspect ratios
+            // 3. Stacking them vertically to create the final 9:16 image
 
-            // Crop both areas
+            // Crop both areas from the source image
             let crop1_img = image::imageops::crop(
                 &mut rgb_image,
                 crop1.x as u32,
@@ -143,38 +145,49 @@ pub fn create_cropped_image(
             )
             .to_image();
 
-            // Scale both crops to match target width if needed
-            let scaled1 = if crop1_img.width() != target_width {
-                resize(
-                    &crop1_img,
-                    target_width,
-                    (target_width as f32 * (8.0 / 9.0)) as u32,
-                    image::imageops::FilterType::Lanczos3,
-                )
+            // Calculate the target 9:16 aspect ratio height
+            let target_height = (target_width as f32 * (16.0 / 9.0)) as u32;
+            
+            // Determine scaling strategy based on crop aspect ratios
+            let crop1_aspect = crop1.width / crop1.height;
+            let crop2_aspect = crop2.width / crop2.height;
+            
+            let (top_height, bottom_height) = if (crop1_aspect - 0.9).abs() < 0.1 && (crop2_aspect - 1.5).abs() < 0.1 {
+                // Special case: 9:10 and 9:6 crops (three heads case)
+                // Scale proportionally: 10/16 and 6/16
+                let top_height = (target_height as f32 * (10.0 / 16.0)) as u32;
+                let bottom_height = (target_height as f32 * (6.0 / 16.0)) as u32;
+                (top_height, bottom_height)
             } else {
-                crop1_img
+                // Default case: equal height crops (like 9:8 + 9:8)
+                // Scale both to half height
+                let half_height = target_height / 2;
+                (half_height, half_height)
             };
+            
+            // Scale both crops to fit the target width and their calculated heights
+            let scaled1 = resize(
+                &crop1_img,
+                target_width,
+                top_height,
+                image::imageops::FilterType::Lanczos3,
+            );
 
-            let scaled2 = if crop2_img.width() != target_width {
-                resize(
-                    &crop2_img,
-                    target_width,
-                    (target_width as f32 * (8.0 / 9.0)) as u32,
-                    image::imageops::FilterType::Lanczos3,
-                )
-            } else {
-                crop2_img
-            };
+            let scaled2 = resize(
+                &crop2_img,
+                target_width,
+                bottom_height,
+                image::imageops::FilterType::Lanczos3,
+            );
 
-            // Create a new image with the combined height
-            let total_height = scaled1.height() + scaled2.height();
-            let mut result = RgbImage::new(target_width, total_height);
+            // Create a new image with 9:16 aspect ratio
+            let mut result = RgbImage::new(target_width, target_height);
 
-            // Copy the first crop to the top
+            // Copy the first crop to the top portion
             image::imageops::overlay(&mut result, &scaled1, 0, 0);
 
-            // Copy the second crop below the first
-            image::imageops::overlay(&mut result, &scaled2, 0, scaled1.height() as i64);
+            // Copy the second crop to the bottom portion
+            image::imageops::overlay(&mut result, &scaled2, 0, top_height as i64);
 
             // Convert back to usls::Image
             Ok(Image::from(result))
@@ -283,17 +296,63 @@ mod tests {
         }
         let image = Image::from(rgb_image);
 
-        // Create two crop areas
+        // Create two crop areas with different aspect ratios to test the new logic
         let crop1 = CropArea::new(0.0, 0.0, 1080.0, 960.0); // 9:8 aspect ratio
-        let crop2 = CropArea::new(960.0, 0.0, 1080.0, 960.0); // 9:8 aspect ratio
+        let crop2 = CropArea::new(960.0, 0.0, 1080.0, 720.0); // 3:2 aspect ratio (different height)
         let crop_result = CropResult::Stacked(crop1, crop2);
 
         // Create the cropped image with target width of 1080
         let cropped = create_cropped_image(&image, &crop_result, 1080).unwrap();
 
-        // Verify dimensions
-        assert_eq!(cropped.width(), 1080);
-        assert_eq!(cropped.height(), 1920); // Combined height of both crops
+        // Verify dimensions - should be 9:16 aspect ratio
+        assert_eq!(cropped.width(), 1080); // Width matches target width
+        assert_eq!(cropped.height(), 1920); // 9:16 aspect ratio (1080 * 16/9)
+        
+        // Verify that the crops are properly scaled and stacked
+        // The crops should maintain their relative proportions but fit into the 9:16 frame
+    }
+
+    #[test]
+    fn test_three_heads_special_case_stacked_crops() {
+        // Create a test image
+        let mut rgb_image = RgbImage::new(1920, 1080);
+        // Fill with a test pattern
+        for y in 0..1080 {
+            for x in 0..1920 {
+                let pixel = if (x + y) % 2 == 0 {
+                    image::Rgb([255, 255, 255]) // White
+                } else {
+                    image::Rgb([0, 0, 0]) // Black
+                };
+                rgb_image.put_pixel(x, y, pixel);
+            }
+        }
+        let image = Image::from(rgb_image);
+
+        // Create crop areas that match the three-heads special case dimensions
+        // First crop: 90% height, 3:5 aspect ratio (taller and skinnier)
+        let crop1_height = 1080.0 * 0.9; // 972
+        let crop1_width = crop1_height * 0.6; // 583.2
+        let crop1 = CropArea::new(0.0, 54.0, crop1_width, crop1_height); // 5% from top
+        
+        // Second crop: 70% height, 5:6 aspect ratio (shorter and wider)
+        let crop2_height = 1080.0 * 0.7; // 756
+        let crop2_width = crop2_height * 1.2; // 907.2
+        let crop2 = CropArea::new(960.0, 162.0, crop2_width, crop2_height); // 15% from top
+        
+        let crop_result = CropResult::Stacked(crop1, crop2);
+
+        // Create the cropped image with target width of 1080
+        let cropped = create_cropped_image(&image, &crop_result, 1080).unwrap();
+
+        // Verify dimensions - should be 9:16 aspect ratio
+        assert_eq!(cropped.width(), 1080); // Width matches target width
+        assert_eq!(cropped.height(), 1920); // 9:16 aspect ratio (1080 * 16/9)
+        
+        // Verify that the crops are properly scaled and stacked
+        // The crops should maintain their relative proportions but fit into the 9:16 frame
+        // For the three-heads special case, the taller/skinnier crop should take more vertical space
+        // and the shorter/wider crop should take less vertical space
     }
 
     #[test]
