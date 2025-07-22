@@ -39,12 +39,12 @@ pub struct Args {
     #[argh(option, default = "0.7")]
     pub object_prob_threshold: f32,
 
-    /// cut similarity threshold (default: 0.15)
-    #[argh(option, default = "0.15")]
+    /// cut similarity threshold (default: 0.3)
+    #[argh(option, default = "0.3")]
     pub cut_similarity: f64,
 
-    /// cut start threshold (default: 0.7)
-    #[argh(option, default = "0.7")]
+    /// cut start threshold (default: 0.8)
+    #[argh(option, default = "0.8")]
     pub cut_start: f64,
 
     /// use headless mode

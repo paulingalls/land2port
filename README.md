@@ -99,8 +99,8 @@ cargo run --release -- \
 - `--use-simple-smoothing`: Use simple smoothing instead of history smoothing
 
 #### Cut Detection Options
-- `--cut-similarity <FLOAT>`: Cut similarity threshold (default: `0.15`)
-- `--cut-start <FLOAT>`: Cut start threshold (default: `0.7`)
+- `--cut-similarity <FLOAT>`: Cut similarity threshold (default: `0.3`)
+- `--cut-start <FLOAT>`: Cut start threshold (default: `0.8`)
 
 #### Graphic Processing Options
 - `--keep-graphic`: Keep graphic elements in the video
