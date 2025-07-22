@@ -586,8 +586,7 @@ pub fn is_crop_class_same(head_count1: usize, head_count2: usize) -> bool {
             0 => 0,     // 0 heads
             1 => 1,     // 1 head
             2 => 2,     // 2 heads
-            3..=5 => 3, // 3 to 5 heads
-            6.. => 4,   // 6 or more heads
+            3.. => 3, // 3 or more heads
         }
     }
 
