@@ -71,8 +71,10 @@ cargo run --release -- \
   --smooth-percentage 5.0 \
   --smooth-duration 30 \
   --device cuda:0 \
-  --version 11.0 \
-  --scale l
+  --ver 11.0 \
+  --scale l \
+  --object-prob-threshold 0.8 \
+  --use-simple-smoothing
 ```
 
 ### Command Line Options
@@ -82,7 +84,7 @@ cargo run --release -- \
 
 #### Object Detection
 - `--object <TYPE>`: Object type to detect - `face`, `head`, `ball`, `sports ball`, `frisbee`, `person`, `car`, `truck`, or `boat` (default: `face`)
-= `--object-prob-threshold <FLOAT>`: Threshold where object gets included in crop logic (default `0.7`)
+- `--object-prob-threshold <FLOAT>`: Threshold where object gets included in crop logic (default: `0.7`)
 
 #### Model Configuration
 - `--device <DEVICE>`: Processing device - `cpu:0`, `cuda:0`, `coreml` (default: `cpu:0`)
@@ -94,6 +96,15 @@ cargo run --release -- \
 - `--use-stack-crop`: Enable stacked crop mode for interviews with 2 people
 - `--smooth-percentage <FLOAT>`: Smoothing threshold percentage (default: `10.0`)
 - `--smooth-duration <INT>`: Smoothing duration in frames (default: `45`)
+- `--use-simple-smoothing`: Use simple smoothing instead of history smoothing
+
+#### Cut Detection Options
+- `--cut-similarity <FLOAT>`: Cut similarity threshold (default: `0.15`)
+- `--cut-start <FLOAT>`: Cut start threshold (default: `0.7`)
+
+#### Graphic Processing Options
+- `--keep-graphic`: Keep graphic elements in the video
+- `--graphic-threshold <FLOAT>`: Graphic threshold for CLIP model classification (default: `0.3`)
 
 #### Processing Options
 - `--headless`: Run without GUI display
@@ -129,11 +140,14 @@ To prevent jarring transitions, the tool implements intelligent smoothing:
 - Compares crop similarity using percentage thresholds
 - Maintains crop consistency for a configurable number of frames
 - Smooths transitions between different crop types
+- Supports both history-based smoothing and simple smoothing modes
 
 ### 4. Video Processing
 - Crops each frame according to the calculated areas
 - Maintains 9:16 aspect ratio for portrait output
 - Processes frames at the original video's frame rate
+- Detects scene cuts to optimize processing
+- Optionally preserves graphic elements using CLIP model classification
 
 ### 5. Transcription
 - Extracts audio from the video
@@ -254,6 +268,18 @@ cargo run --release -- \
   --object person \
   --source street_scene.mp4 \
   --headless
+```
+
+### Process with cut detection and graphic preservation
+```bash
+cargo run --release -- \
+  --object face \
+  --source presentation.mp4 \
+  --headless \
+  --cut-similarity 0.2 \
+  --cut-start 0.6 \
+  --keep-graphic \
+  --graphic-threshold 0.4
 ```
 
 ## Performance Tips
