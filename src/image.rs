@@ -74,7 +74,7 @@ impl CutDetector {
 ///
 /// # Returns
 /// A new image containing either a single 9:16 crop or two crops stacked vertically:
-/// - For three heads: top crop (9:10) + bottom crop (9:6) = 9:16 final image
+/// - For three heads: top crop (9:6) + bottom crop (9:10) = 9:16 final image
 /// - For other cases: two equal crops stacked to create 9:16 final image
 pub fn create_cropped_image(
     image: &Image,
@@ -152,11 +152,11 @@ pub fn create_cropped_image(
             let crop1_aspect = crop1.width / crop1.height;
             let crop2_aspect = crop2.width / crop2.height;
             
-            let (top_height, bottom_height) = if (crop1_aspect - 0.9).abs() < 0.1 && (crop2_aspect - 1.5).abs() < 0.1 {
-                // Special case: 9:10 and 9:6 crops (three heads case)
-                // Scale proportionally: 10/16 and 6/16
-                let top_height = (target_height as f32 * (10.0 / 16.0)) as u32;
-                let bottom_height = (target_height as f32 * (6.0 / 16.0)) as u32;
+            let (top_height, bottom_height) = if (crop1_aspect - 1.5).abs() < 0.1 && (crop2_aspect - 0.9).abs() < 0.1 {
+                // Special case: 9:6 and 9:10 crops (three heads case)
+                // Scale proportionally: 6/16 and 10/16
+                let top_height = (target_height as f32 * (6.0 / 16.0)) as u32;
+                let bottom_height = (target_height as f32 * (10.0 / 16.0)) as u32;
                 (top_height, bottom_height)
             } else {
                 // Default case: equal height crops (like 9:8 + 9:8)

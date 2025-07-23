@@ -251,37 +251,36 @@ pub fn calculate_three_heads_crop(
 
         if similar_size && equally_spaced && use_stack_crop {
             // Create special stacked crop designed to work together for 9:16 final image
-            // First crop: for single head - 9:10 aspect ratio (will be top portion of 9:16)
+            // First crop: for two heads - 9:6 aspect ratio (will be top portion of 9:16)
             let crop1_height = frame_height * 0.8; // 80% of frame height
-            let crop1_width = crop1_height * 0.9; // 9:10 aspect ratio
+            let crop1_width = crop1_height * 1.5; // 9:6 aspect ratio
             let crop1_y = frame_height * 0.1; // 10% from top
 
-            // Second crop: for two heads - 9:6 aspect ratio (will be bottom portion of 9:16)
+            // Second crop: for single head - 9:10 aspect ratio (will be bottom portion of 9:16)
             let crop2_height = frame_height * 0.8; // 80% of frame height
-            let crop2_width = crop2_height * 1.5; // 9:6 aspect ratio
-            let crop2_y = frame_height * 0.1; // 10% from top
+            let crop2_width = crop2_height * 0.9; // 9:10 aspect ratio
+            let crop2_y = frame_height * 0.15; // 15% from top
 
-            // Position first crop to contain the leftmost head
+            // Position first crop to contain the leftmost two heads
+            // Calculate the bounding box of the leftmost and middle heads
             let leftmost_center = sorted_centers[0];
-            let mut crop1_x = leftmost_center - crop1_width / 2.0;
-            crop1_x = crop1_x.max(0.0).min(frame_width - crop1_width);
-
-            // Position second crop to contain the other two heads
-            // Since the crops are now skinnier (9:16), we need to ensure they can contain the heads
-            // Calculate the bounding box of the middle and rightmost heads
             let middle_center = sorted_centers[1];
-            let rightmost_center = sorted_centers[2];
             
             // Find the heads that correspond to these centers
+            let head1 = heads.iter().find(|h| (h.cx() - leftmost_center).abs() < 1.0).unwrap();
             let head2 = heads.iter().find(|h| (h.cx() - middle_center).abs() < 1.0).unwrap();
-            let head3 = heads.iter().find(|h| (h.cx() - rightmost_center).abs() < 1.0).unwrap();
             
             // Calculate the bounding box of these two heads
-            let min_x = head2.xmin().min(head3.xmin());
-            let max_x = head2.xmax().max(head3.xmax());
+            let min_x = head1.xmin().min(head2.xmin());
+            let max_x = head1.xmax().max(head2.xmax());
             let center_between_two = (min_x + max_x) / 2.0;
             
-            let mut crop2_x = center_between_two - crop2_width / 2.0;
+            let mut crop1_x = center_between_two - crop1_width / 2.0;
+            crop1_x = crop1_x.max(0.0).min(frame_width - crop1_width);
+
+            // Position second crop to contain the rightmost head
+            let rightmost_center = sorted_centers[2];
+            let mut crop2_x = rightmost_center - crop2_width / 2.0;
             crop2_x = crop2_x.max(0.0).min(frame_width - crop2_width);
 
             let crop1 = CropArea::new(crop1_x, crop1_y, crop1_width, crop1_height);
@@ -1653,16 +1652,16 @@ mod tests {
         let crop = calculate_three_heads_crop(true, frame_width, frame_height, &heads);
         match crop {
             CropResult::Stacked(crop1, crop2) => {
-                // First crop should be optimized for single head (80% height, 9:10 aspect ratio)
+                // First crop should be optimized for two heads (80% height, 9:6 aspect ratio)
                 let expected_crop1_height = frame_height * 0.8;
-                let expected_crop1_width = expected_crop1_height * 0.9;
+                let expected_crop1_width = expected_crop1_height * 1.5;
                 assert!((crop1.height - expected_crop1_height).abs() < 1.0);
                 assert!((crop1.width - expected_crop1_width).abs() < 1.0);
                 assert!((crop1.y - frame_height * 0.1).abs() < 1.0);
 
-                // Second crop should be optimized for two heads (80% height, 9:6 aspect ratio)
+                // Second crop should be optimized for single head (80% height, 9:10 aspect ratio)
                 let expected_crop2_height = frame_height * 0.8;
-                let expected_crop2_width = expected_crop2_height * 1.5;
+                let expected_crop2_width = expected_crop2_height * 0.9;
                 assert!((crop2.height - expected_crop2_height).abs() < 1.0);
                 assert!((crop2.width - expected_crop2_width).abs() < 1.0);
                 assert!((crop2.y - frame_height * 0.1).abs() < 1.0);
@@ -1677,22 +1676,23 @@ mod tests {
                 assert!(crop2.y >= 0.0);
                 assert!(crop2.y + crop2.height <= frame_height);
 
+                // First crop should contain the leftmost two heads
                 let head1_xmin = head1.xmin();
                 let head1_xmax = head1.xmax();
+                let head2_xmin = head2.xmin();
+                let head2_xmax = head2.xmax();
                 let head1_in_crop1 = head1_xmin >= crop1.x && head1_xmax <= crop1.x + crop1.width;
+                let head2_in_crop1 = head2_xmin >= crop1.x && head2_xmax <= crop1.x + crop1.width;
                 assert!(
                     head1_in_crop1,
                     "First crop should contain the leftmost head"
                 );
+                assert!(head2_in_crop1, "First crop should contain head2");
 
-                // Second crop should contain the other two heads
-                let head2_xmin = head2.xmin();
-                let head2_xmax = head2.xmax();
+                // Second crop should contain the rightmost head
                 let head3_xmin = head3.xmin();
                 let head3_xmax = head3.xmax();
-                let head2_in_crop2 = head2_xmin >= crop2.x && head2_xmax <= crop2.x + crop2.width;
                 let head3_in_crop2 = head3_xmin >= crop2.x && head3_xmax <= crop2.x + crop2.width;
-                assert!(head2_in_crop2, "Second crop should contain head2");
                 assert!(head3_in_crop2, "Second crop should contain head3");
             }
             _ => panic!("Expected stacked crops for real world case"),
@@ -1715,16 +1715,16 @@ mod tests {
 
         match crop {
             CropResult::Stacked(crop1, crop2) => {
-                // First crop should be optimized for single head (80% height, 9:10 aspect ratio)
+                // First crop should be optimized for two heads (80% height, 9:6 aspect ratio)
                 let expected_crop1_height = frame_height * 0.8;
-                let expected_crop1_width = expected_crop1_height * 0.9;
+                let expected_crop1_width = expected_crop1_height * 1.5;
                 assert!((crop1.height - expected_crop1_height).abs() < 1.0);
                 assert!((crop1.width - expected_crop1_width).abs() < 1.0);
                 assert!((crop1.y - frame_height * 0.1).abs() < 1.0);
 
-                // Second crop should be optimized for two heads (80% height, 9:6 aspect ratio)
+                // Second crop should be optimized for single head (80% height, 9:10 aspect ratio)
                 let expected_crop2_height = frame_height * 0.8;
-                let expected_crop2_width = expected_crop2_height * 1.5;
+                let expected_crop2_width = expected_crop2_height * 0.9;
                 assert!((crop2.height - expected_crop2_height).abs() < 1.0);
                 assert!((crop2.width - expected_crop2_width).abs() < 1.0);
                 assert!((crop2.y - frame_height * 0.1).abs() < 1.0);
@@ -1739,23 +1739,23 @@ mod tests {
                 assert!(crop2.y >= 0.0);
                 assert!(crop2.y + crop2.height <= frame_height);
 
-                // First crop should contain the leftmost head (head1)
+                // First crop should contain the leftmost two heads
                 let head1_xmin = head1.xmin();
                 let head1_xmax = head1.xmax();
+                let head2_xmin = head2.xmin();
+                let head2_xmax = head2.xmax();
                 let head1_in_crop1 = head1_xmin >= crop1.x && head1_xmax <= crop1.x + crop1.width;
+                let head2_in_crop1 = head2_xmin >= crop1.x && head2_xmax <= crop1.x + crop1.width;
                 assert!(
                     head1_in_crop1,
                     "First crop should contain the leftmost head"
                 );
+                assert!(head2_in_crop1, "First crop should contain head2");
 
-                // Second crop should contain the other two heads
-                let head2_xmin = head2.xmin();
-                let head2_xmax = head2.xmax();
+                // Second crop should contain the rightmost head
                 let head3_xmin = head3.xmin();
                 let head3_xmax = head3.xmax();
-                let head2_in_crop2 = head2_xmin >= crop2.x && head2_xmax <= crop2.x + crop2.width;
                 let head3_in_crop2 = head3_xmin >= crop2.x && head3_xmax <= crop2.x + crop2.width;
-                assert!(head2_in_crop2, "Second crop should contain head2");
                 assert!(head3_in_crop2, "Second crop should contain head3");
             }
             _ => panic!("Expected stacked crops for special three heads case"),
