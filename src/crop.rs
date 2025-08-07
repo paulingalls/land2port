@@ -324,16 +324,18 @@ pub fn calculate_four_and_five_heads_crop(
 
         CropResult::Single(CropArea::new(x, 0.0, width, height))
     } else if use_stack_crop {
-        // For far heads, use assignment-based approach
-        let crop_height = frame_height * (8.0 / 9.0);
-        let crop_width = frame_height;
-        let crop_y = frame_height / 18.0;
+        // Mirror the two-heads stacked crop: two half-width crops side-by-side with 8:9 height
+        let crop_width = frame_width * 0.5;
+        let crop_height = crop_width * (8.0 / 9.0);
+        let default_y = (frame_height - crop_height) / 2.0;
 
         // Default crop positions
         let mut x1 = 0.0;
-        let mut x2 = frame_width - crop_width;
-        let crop1_default = CropArea::new(x1, crop_y, crop_width, crop_height);
-        let crop2_default = CropArea::new(x2, crop_y, crop_width, crop_height);
+        let mut x2 = crop_width;
+        let mut crop1_y = default_y;
+        let mut crop2_y = default_y;
+        let crop1_default = CropArea::new(x1, crop1_y, crop_width, crop_height);
+        let crop2_default = CropArea::new(x2, crop2_y, crop_width, crop_height);
 
         // Check if all heads are fully contained in at least one default crop
         let all_heads_contained = heads.iter().all(|head| {
@@ -347,23 +349,111 @@ pub fn calculate_four_and_five_heads_crop(
         });
 
         if all_heads_contained {
-            // Use default crops to maximize frame coverage
-            return CropResult::Stacked(crop1_default, crop2_default);
+            // Vertically adjust crops while keeping default x positions
+            let frame_center = frame_width / 2.0;
+            let mut left_heads = Vec::new();
+            let mut right_heads = Vec::new();
+            for head in heads {
+                if head.cx() < frame_center {
+                    left_heads.push(*head);
+                } else {
+                    right_heads.push(*head);
+                }
+            }
+
+            let mut left_y = default_y;
+            if !left_heads.is_empty() {
+                let group_top = left_heads
+                    .iter()
+                    .map(|h| h.ymin())
+                    .fold(f32::MAX, f32::min);
+                let group_bottom = left_heads
+                    .iter()
+                    .map(|h| h.ymax())
+                    .fold(f32::MIN, f32::max);
+                left_y = if group_top < default_y {
+                    0.0
+                } else if group_bottom > default_y + crop_height {
+                    frame_height - crop_height
+                } else {
+                    default_y
+                };
+            }
+
+            let mut right_y = default_y;
+            if !right_heads.is_empty() {
+                let group_top = right_heads
+                    .iter()
+                    .map(|h| h.ymin())
+                    .fold(f32::MAX, f32::min);
+                let group_bottom = right_heads
+                    .iter()
+                    .map(|h| h.ymax())
+                    .fold(f32::MIN, f32::max);
+                right_y = if group_top < default_y {
+                    0.0
+                } else if group_bottom > default_y + crop_height {
+                    frame_height - crop_height
+                } else {
+                    default_y
+                };
+            }
+
+            let crop1 = CropArea::new(0.0, left_y, crop_width, crop_height);
+            let crop2 = CropArea::new(crop_width, right_y, crop_width, crop_height);
+            return CropResult::Stacked(crop1, crop2);
         }
 
-        // Otherwise, assign heads to crops based on which side of the frame they're closer to
+        // Assign heads to crops based on which side of the frame they're closer to
+        let frame_center = frame_width / 2.0;
         let mut crop1_heads = Vec::new();
         let mut crop2_heads = Vec::new();
-        let frame_center = frame_width / 2.0;
         for head in heads {
-            let head_center = head.cx();
-            if head_center < frame_center {
+            if head.cx() < frame_center {
                 crop1_heads.push(*head);
             } else {
                 crop2_heads.push(*head);
             }
         }
-        // Position crop1 to contain all its assigned heads
+
+        // Vertical positioning per side (top/bottom bias like two-heads)
+        if !crop1_heads.is_empty() {
+            let group_top = crop1_heads
+                .iter()
+                .map(|h| h.ymin())
+                .fold(f32::MAX, f32::min);
+            let group_bottom = crop1_heads
+                .iter()
+                .map(|h| h.ymax())
+                .fold(f32::MIN, f32::max);
+            crop1_y = if group_top < default_y {
+                0.0
+            } else if group_bottom > default_y + crop_height {
+                frame_height - crop_height
+            } else {
+                default_y
+            };
+        }
+
+        if !crop2_heads.is_empty() {
+            let group_top = crop2_heads
+                .iter()
+                .map(|h| h.ymin())
+                .fold(f32::MAX, f32::min);
+            let group_bottom = crop2_heads
+                .iter()
+                .map(|h| h.ymax())
+                .fold(f32::MIN, f32::max);
+            crop2_y = if group_top < default_y {
+                0.0
+            } else if group_bottom > default_y + crop_height {
+                frame_height - crop_height
+            } else {
+                default_y
+            };
+        }
+
+        // Horizontal positioning to contain assigned heads
         if !crop1_heads.is_empty() {
             let min_x = crop1_heads
                 .iter()
@@ -378,9 +468,10 @@ pub fn calculate_four_and_five_heads_crop(
             } else {
                 x1 = min_x;
             }
-            x1 = x1.max(0.0).min(frame_width - crop_width);
+            // Clamp within its half
+            x1 = x1.max(0.0).min(crop_width);
         }
-        // Position crop2 to contain all its assigned heads
+
         if !crop2_heads.is_empty() {
             let min_x = crop2_heads
                 .iter()
@@ -395,11 +486,14 @@ pub fn calculate_four_and_five_heads_crop(
             } else {
                 x2 = max_x - crop_width;
             }
-            x2 = x2.max(0.0).min(frame_width - crop_width);
+            // Clamp within its half start position
+            x2 = x2.max(0.0).min(crop_width);
         }
+
         // Create the crops
-        let mut crop1 = CropArea::new(x1, crop_y, crop_width, crop_height);
-        let mut crop2 = CropArea::new(x2, crop_y, crop_width, crop_height);
+        let mut crop1 = CropArea::new(x1, crop1_y, crop_width, crop_height);
+        let mut crop2 = CropArea::new(x2, crop2_y, crop_width, crop_height);
+
         // Verify that every head is fully contained in at least one crop, adjust if not
         for head in heads {
             let head_xmin = head.xmin();
@@ -412,12 +506,12 @@ pub fn calculate_four_and_five_heads_crop(
                 let dist_to_crop2 = (head_center - (crop2.x + crop2.width / 2.0)).abs();
                 if dist_to_crop1 <= dist_to_crop2 {
                     let new_x1 = head_xmin;
-                    x1 = new_x1.max(0.0).min(frame_width - crop_width);
-                    crop1 = CropArea::new(x1, crop_y, crop_width, crop_height);
+                    x1 = new_x1.max(0.0).min(crop_width);
+                    crop1 = CropArea::new(x1, crop1_y, crop_width, crop_height);
                 } else {
                     let new_x2 = head_xmax - crop_width;
-                    x2 = new_x2.max(0.0).min(frame_width - crop_width);
-                    crop2 = CropArea::new(x2, crop_y, crop_width, crop_height);
+                    x2 = new_x2.max(0.0).min(crop_width);
+                    crop2 = CropArea::new(x2, crop2_y, crop_width, crop_height);
                 }
             }
         }
@@ -475,10 +569,10 @@ pub fn calculate_six_or_more_heads_crop(
             let large_head = heads[large_head_idx];
 
             if use_stack_crop {
-                // Create two stacked crops: one centered on the large head, one for remaining heads
-                let crop_height = frame_height * (8.0 / 9.0);
-                let crop_width = frame_height;
-                let crop_y = frame_height / 18.0;
+                // Two stacked crops mirroring two-heads behavior (half-width 8:9, vertically centered)
+                let crop_width = frame_width * 0.5;
+                let crop_height = crop_width * (8.0 / 9.0);
+                let crop_y = (frame_height - crop_height) / 2.0;
 
                 // First crop centered on the large head
                 let mut crop1_x = large_head.cx() - crop_width / 2.0;
@@ -494,7 +588,6 @@ pub fn calculate_six_or_more_heads_crop(
                     .collect();
 
                 if remaining_heads.is_empty() {
-                    // If no remaining heads, just return the single crop
                     return CropResult::Single(CropArea::new(
                         crop1_x,
                         0.0,
@@ -503,10 +596,8 @@ pub fn calculate_six_or_more_heads_crop(
                     ));
                 }
 
-                // Calculate bounding box of remaining heads
+                // Position second crop to contain remaining heads near their center
                 let remaining_bbox = calculate_bounding_box(&remaining_heads);
-
-                // Position second crop to contain remaining heads
                 let mut crop2_x = remaining_bbox.x + remaining_bbox.width / 2.0 - crop_width / 2.0;
                 crop2_x = crop2_x.max(0.0).min(frame_width - crop_width);
 
@@ -1181,25 +1272,26 @@ mod tests {
 
         match crop {
             CropResult::Stacked(crop1, crop2) => {
-                // Both crops should have height of 8/9 of frame height
-                let expected_height = frame_height * (8.0 / 9.0);
+                // Both crops should have height of 8/9 of half frame width
+                let expected_width = frame_width * 0.5;
+                let expected_height = expected_width * (8.0 / 9.0);
                 assert!((crop1.height - expected_height).abs() < 1.0);
                 assert!((crop2.height - expected_height).abs() < 1.0);
 
-                // Both crops should have width equal to frame height
-                assert!((crop1.width - frame_height).abs() < 1.0);
-                assert!((crop2.width - frame_height).abs() < 1.0);
+                // Both crops should have width equal to half frame width
+                assert!((crop1.width - expected_width).abs() < 1.0);
+                assert!((crop2.width - expected_width).abs() < 1.0);
 
-                // Both crops should be at y = frame_height/18
-                let expected_y = frame_height / 18.0;
+                // Both crops should be centered vertically
+                let expected_y = (frame_height - expected_height) / 2.0;
                 assert!((crop1.y - expected_y).abs() < 1.0);
                 assert!((crop2.y - expected_y).abs() < 1.0);
 
                 // First crop should be at x=0
                 assert!(crop1.x.abs() < 1.0);
 
-                // Second crop should be at x = frame_width - frame_height
-                assert!((crop2.x - (frame_width - frame_height)).abs() < 1.0);
+                // Second crop should be at x = frame_width/2
+                assert!((crop2.x - (frame_width / 2.0)).abs() < 1.0);
 
                 // Both crops should be within frame bounds
                 assert!(crop1.x >= 0.0);
@@ -1233,6 +1325,50 @@ mod tests {
     }
 
     #[test]
+    fn test_calculate_four_and_five_heads_crop_all_heads_contained_with_vertical_adjust() {
+        let frame_width = 1920.0;
+        let frame_height = 1080.0;
+
+        // Arrange heads so that all are horizontally contained within default half crops
+        // Left side heads near top; Right side heads near bottom
+        let head_left_top = Hbb::from_cxcywh(200.0, 60.0, 100.0, 100.0);
+        let head_left_top2 = Hbb::from_cxcywh(400.0, 65.0, 100.0, 100.0);
+        let head_right_bottom = Hbb::from_cxcywh(1520.0, frame_height - 60.0, 100.0, 100.0);
+        let head_right_bottom2 = Hbb::from_cxcywh(1720.0, frame_height - 65.0, 100.0, 100.0);
+        let heads = vec![
+            &head_left_top,
+            &head_left_top2,
+            &head_right_bottom,
+            &head_right_bottom2,
+        ];
+
+        let crop = calculate_four_and_five_heads_crop(true, frame_width, frame_height, &heads);
+
+        match crop {
+            CropResult::Stacked(crop1, crop2) => {
+                let expected_width = frame_width * 0.5;
+                let expected_height = expected_width * (8.0 / 9.0);
+
+                // Left crop should be nudged to top (0.0)
+                assert!((crop1.y - 0.0).abs() < 1.0);
+                // Right crop should be nudged to bottom
+                assert!((crop2.y - (frame_height - expected_height)).abs() < 1.0);
+
+                // Width/height remain half-width based
+                assert!((crop1.width - expected_width).abs() < 1.0);
+                assert!((crop2.width - expected_width).abs() < 1.0);
+                assert!((crop1.height - expected_height).abs() < 1.0);
+                assert!((crop2.height - expected_height).abs() < 1.0);
+
+                // x positions remain default halves
+                assert!(crop1.x.abs() < 1.0);
+                assert!((crop2.x - expected_width).abs() < 1.0);
+            }
+            _ => panic!("Expected stacked crops for all_heads_contained with vertical adjust case"),
+        }
+    }
+
+    #[test]
     fn test_calculate_four_and_five_heads_crop_far_adjusted() {
         let frame_width = 1920.0;
         let frame_height = 1080.0;
@@ -1247,17 +1383,18 @@ mod tests {
 
         match crop {
             CropResult::Stacked(crop1, crop2) => {
-                // Both crops should have height of 8/9 of frame height
-                let expected_height = frame_height * (8.0 / 9.0);
+                // Both crops should have height of 8/9 of half frame width
+                let expected_width = frame_width * 0.5;
+                let expected_height = expected_width * (8.0 / 9.0);
                 assert!((crop1.height - expected_height).abs() < 1.0);
                 assert!((crop2.height - expected_height).abs() < 1.0);
 
-                // Both crops should have width equal to frame height
-                assert!((crop1.width - frame_height).abs() < 1.0);
-                assert!((crop2.width - frame_height).abs() < 1.0);
+                // Both crops should have width equal to half frame width
+                assert!((crop1.width - expected_width).abs() < 1.0);
+                assert!((crop2.width - expected_width).abs() < 1.0);
 
-                // Both crops should be at y = frame_height/18
-                let expected_y = frame_height / 18.0;
+                // Both crops should be centered vertically
+                let expected_y = (frame_height - expected_height) / 2.0;
                 assert!((crop1.y - expected_y).abs() < 1.0);
                 assert!((crop2.y - expected_y).abs() < 1.0);
 
@@ -1844,9 +1981,9 @@ fn test_calculate_three_heads_crop_real_world_lex() {
         // Since heads are far apart, should get stacked crops with default dimensions
         match crop {
             CropResult::Stacked(crop1, crop2) => {
-                // Should have default stacked crop dimensions
-                let expected_height = frame_height * (8.0 / 9.0);
-                let expected_width = frame_height;
+                // Should have stacked crop dimensions mirroring two-heads behavior
+                let expected_width = frame_width * 0.5;
+                let expected_height = expected_width * (8.0 / 9.0);
                 assert!((crop1.height - expected_height).abs() < 1.0);
                 assert!((crop2.height - expected_height).abs() < 1.0);
                 assert!((crop1.width - expected_width).abs() < 1.0);
@@ -2022,17 +2159,18 @@ fn test_calculate_three_heads_crop_real_world_lex() {
 
         match crop {
             CropResult::Stacked(crop1, crop2) => {
-                // Both crops should have height of 8/9 of frame height
-                let expected_height = frame_height * (8.0 / 9.0);
+                // Both crops should have height of 8/9 of half frame width
+                let expected_width = frame_width * 0.5;
+                let expected_height = expected_width * (8.0 / 9.0);
                 assert!((crop1.height - expected_height).abs() < 1.0);
                 assert!((crop2.height - expected_height).abs() < 1.0);
 
-                // Both crops should have width equal to frame height
-                assert!((crop1.width - frame_height).abs() < 1.0);
-                assert!((crop2.width - frame_height).abs() < 1.0);
+                // Both crops should have width equal to half frame width
+                assert!((crop1.width - expected_width).abs() < 1.0);
+                assert!((crop2.width - expected_width).abs() < 1.0);
 
-                // Both crops should be at y = frame_height/18
-                let expected_y = frame_height / 18.0;
+                // Both crops should be centered vertically
+                let expected_y = (frame_height - expected_height) / 2.0;
                 assert!((crop1.y - expected_y).abs() < 1.0);
                 assert!((crop2.y - expected_y).abs() < 1.0);
 
