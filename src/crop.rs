@@ -229,7 +229,7 @@ pub fn calculate_three_heads_crop(
     let min_area = areas.iter().fold(f32::MAX, |a, &b| a.min(b));
     let max_area = areas.iter().fold(f32::MIN, |a, &b| a.max(b));
     let size_ratio = max_area / min_area;
-    let similar_size = size_ratio <= 1.75;
+    let similar_size = size_ratio <= 2.5;
 
     // Check if heads are roughly equally spaced across the screen
     let centers: Vec<f32> = heads.iter().map(|h| h.cx()).collect();
@@ -242,7 +242,7 @@ pub fn calculate_three_heads_crop(
     let spacing1 = sorted_centers[1] - sorted_centers[0];
     let spacing2 = sorted_centers[2] - sorted_centers[1];
     let spacing_ratio = spacing1.max(spacing2) / spacing1.min(spacing2);
-    let equally_spaced = spacing_ratio <= 1.3;
+    let equally_spaced = spacing_ratio <= 2.0;
 
     if similar_size && equally_spaced && use_stack_crop {
         // Create special stacked crop designed to work together for 9:16 final image
@@ -1124,7 +1124,7 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_three_to_five_heads_crop_close() {
+    fn test_calculate_four_and_five_heads_crop_close() {
         let frame_width = 1920.0;
         let frame_height = 1080.0;
 
@@ -1167,7 +1167,7 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_three_to_five_heads_crop_far_default() {
+    fn test_calculate_four_and_five_heads_crop_far_default() {
         let frame_width = 1920.0;
         let frame_height = 1080.0;
 
@@ -1233,7 +1233,7 @@ mod tests {
     }
 
     #[test]
-    fn test_calculate_three_to_five_heads_crop_far_adjusted() {
+    fn test_calculate_four_and_five_heads_crop_far_adjusted() {
         let frame_width = 1920.0;
         let frame_height = 1080.0;
 
@@ -1702,6 +1702,67 @@ mod tests {
             _ => panic!("Expected stacked crops for real world case"),
         }
     }
+
+    //[Hbb { xyxy: [864.88776, 344.61285, 1026.0613, 568.9608], id: Some(0), name: Some("face"), confidence: Some(0.8433464) }, Hbb { xyxy: [1477.2578, 277.67084, 1673.3591, 527.8382], id: Some(0), name: Some("face"), confidence: Some(0.8317215) }, Hbb { xyxy: [459.09668, 252.47464, 587.0282, 434.82794], id: Some(0), name: Some("face"), confidence: Some(0.82271504) }]
+#[test]
+fn test_calculate_three_heads_crop_real_world_lex() {
+    let frame_width = 1920.0;
+    let frame_height = 1080.0;
+
+    let head1 = Hbb::from_xyxy(459.09668, 252.47464, 587.0282, 434.82794);
+    let head2 = Hbb::from_xyxy(864.88776, 344.61285, 1026.0613, 568.9608);
+    let head3 = Hbb::from_xyxy(1477.2578, 277.67084, 1673.3591, 527.8382);
+    let heads = vec![&head1, &head2, &head3];
+    let crop = calculate_three_heads_crop(true, frame_width, frame_height, &heads);
+    match crop {
+        CropResult::Stacked(crop1, crop2) => {
+            // First crop should be optimized for two heads (80% height, 9:6 aspect ratio)
+            let expected_crop1_height = frame_height * 0.8;
+            let expected_crop1_width = expected_crop1_height * 1.5;
+            assert!((crop1.height - expected_crop1_height).abs() < 1.0);
+            assert!((crop1.width - expected_crop1_width).abs() < 1.0);
+            assert!((crop1.y - frame_height * 0.1).abs() < 1.0);
+
+            // Second crop should be optimized for single head (80% height, 9:10 aspect ratio)
+            let expected_crop2_height = frame_height * 0.8;
+            let expected_crop2_width = expected_crop2_height * 0.9;
+            assert!((crop2.height - expected_crop2_height).abs() < 1.0);
+            assert!((crop2.width - expected_crop2_width).abs() < 1.0);
+            assert!((crop2.y - frame_height * 0.15).abs() < 1.0);
+
+            // Both crops should be within frame bounds
+            assert!(crop1.x >= 0.0);
+            assert!(crop1.x + crop1.width <= frame_width);
+            assert!(crop1.y >= 0.0);
+            assert!(crop1.y + crop1.height <= frame_height);
+            assert!(crop2.x >= 0.0);
+            assert!(crop2.x + crop2.width <= frame_width);
+            assert!(crop2.y >= 0.0);
+            assert!(crop2.y + crop2.height <= frame_height);
+
+            // First crop should contain the leftmost two heads
+            let head1_xmin = head1.xmin();
+            let head1_xmax = head1.xmax();
+            let head2_xmin = head2.xmin();
+            let head2_xmax = head2.xmax();
+            let head1_in_crop1 = head1_xmin >= crop1.x && head1_xmax <= crop1.x + crop1.width;
+            let head2_in_crop1 = head2_xmin >= crop1.x && head2_xmax <= crop1.x + crop1.width;
+            assert!(
+                head1_in_crop1,
+                "First crop should contain the leftmost head"
+            );
+            assert!(head2_in_crop1, "First crop should contain head2");
+
+            // Second crop should contain the rightmost head
+            let head3_xmin = head3.xmin();
+            let head3_xmax = head3.xmax();
+            let head3_in_crop2 = head3_xmin >= crop2.x && head3_xmax <= crop2.x + crop2.width;
+            assert!(head3_in_crop2, "Second crop should contain head3");
+        }
+        _ => panic!("Expected stacked crops for real world case"),
+    }
+}
+
 
     #[test]
     fn test_calculate_three_heads_crop_special_case() {
