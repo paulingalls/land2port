@@ -40,6 +40,7 @@ impl VideoProcessor for BallVideoProcessor {
         objects: &[&usls::Hbb],
         args: &Args,
         viewer: &mut Viewer,
+        _smooth_duration_frames: usize,
     ) -> Result<()> {
         let current_ball_count = objects.len();
         

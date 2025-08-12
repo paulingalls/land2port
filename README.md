@@ -4,22 +4,25 @@ A powerful video processing tool that automatically detects objects like faces o
 
 ## Features
 
-- **🎯 Object Detection**: Uses YOLO models to detect faces or heads, footballs or cars in video frames with high accuracy
+- **🎯 Object Detection**: Uses YOLO models to detect faces, heads, footballs, sports balls, frisbees, persons, cars, trucks, or boats in video frames with high accuracy
 - **📱 Portrait Cropping**: Automatically crops videos to 9:16 aspect ratio for mobile viewing
 - **🎬 Smart Cropping Logic**: 
   - Single object: Centers crop on the detected object
   - Multiple objects: Intelligently positions crops to capture all subjects
-  - Stacked crops when appropriate: Creates two 9:8 crops stacked vertically for 2 or 3-5 objects
+  - Stacked crops when appropriate: Creates two 9:8 crops stacked vertically for 2 or 4-5 objects
+  - **Advanced 3-head cropping**: Specialized logic for 3-person interviews with optimized aspect ratios (9:6 + 9:10)
 - **🎙️ AI Transcription**: Generates SRT captions using OpenAI Whisper
 - **🎨 Caption Styling**: Customizable caption appearance with fonts, colors, and positioning
 - **⚡ Smooth Transitions**: Prevents jarring crop changes with intelligent smoothing
 - **🔧 Flexible Configuration**: Extensive command-line options for customization
+- **🎥 Cut Detection**: Intelligent scene cut detection to optimize processing
+- **🖼️ Graphic Preservation**: Optional preservation of graphic elements using CLIP model classification
 
 ## Installation
 
 ### Prerequisites
 
-- **Rust** (latest stable version)
+- **Rust** (latest stable version, edition 2024)
 - **ffmpeg** (for video processing)
 - **OpenAI API Key** (for transcription)
 
@@ -69,7 +72,7 @@ cargo run --release -- \
   --headless \
   --use-stack-crop \
   --smooth-percentage 5.0 \
-  --smooth-duration 30 \
+  --smooth-duration 1.5 \
   --device cuda:0 \
   --ver 11.0 \
   --scale l \
@@ -95,7 +98,7 @@ cargo run --release -- \
 #### Cropping Options
 - `--use-stack-crop`: Enable stacked crop mode for interviews with 2 people
 - `--smooth-percentage <FLOAT>`: Smoothing threshold percentage (default: `10.0`)
-- `--smooth-duration <INT>`: Smoothing duration in frames (default: `45`)
+- `--smooth-duration <FLOAT>`: Smoothing duration in seconds (default: `1.5`)
 - `--use-simple-smoothing`: Use simple smoothing instead of history smoothing
 
 #### Cut Detection Options
@@ -113,7 +116,7 @@ cargo run --release -- \
 
 ### 1. Object Detection
 The tool uses selected YOLO models to detect objects in each video frame. It filters detections by confidence threshold to ensure accuracy.
-Use the `--object` param to select which type of object to detect.  Current options:
+Use the `--object` param to select which type of object to detect. Current options:
 - **face**: Detects faces
 - **head**: Detects heads
 - **person**: Detects people
@@ -128,17 +131,22 @@ Use the `--object` param to select which type of object to detect.  Current opti
 Based on the number of detected objects, the tool calculates optimal crop areas:
 
 - **0 objects**: Centered crop with 3:4 aspect ratio
-- **1 objects**: Crop centered on the detected object
+- **1 object**: Crop centered on the detected object
 - **2 objects**: 
   - If objects are close: Single crop containing both
   - If objects are far apart: Two stacked crops (when `--use-stack-crop` is enabled)
-- **3-5 objects**: Similar logic to 2 objects
+- **3 objects**: 
+  - **Special case**: When heads are similar in size and equally spaced, creates optimized stacked crops:
+    - First crop: 9:6 aspect ratio for two heads (top portion of final 9:16)
+    - Second crop: 9:10 aspect ratio for single head (bottom portion of final 9:16)
+  - **Fallback**: Standard stacked crop logic for other 3-head scenarios
+- **4-5 objects**: Similar logic to 2 objects
 - **6+ objects**: Crop based on the largest detected object
 
 ### 3. Smoothing
 To prevent jarring transitions, the tool implements intelligent smoothing:
 - Compares crop similarity using percentage thresholds
-- Maintains crop consistency for a configurable number of frames
+- Maintains crop consistency for a configurable duration in seconds
 - Smooths transitions between different crop types
 - Supports both history-based smoothing and simple smoothing modes
 
@@ -146,10 +154,19 @@ To prevent jarring transitions, the tool implements intelligent smoothing:
 - Crops each frame according to the calculated areas
 - Maintains 9:16 aspect ratio for portrait output
 - Processes frames at the original video's frame rate
-- Detects scene cuts to optimize processing
+- Detects scene cuts to optimize processing using similarity thresholds
 - Optionally preserves graphic elements using CLIP model classification
 
-### 5. Transcription
+### 5. Advanced 3-Head Cropping
+The tool includes sophisticated logic for handling 3-head scenarios:
+- **Smart Detection**: Automatically detects when 3 heads are similar in size and equally spaced
+- **Optimized Ratios**: Creates two crops with specific aspect ratios designed to work together:
+  - Top crop (9:6 ratio) captures two heads for the upper portion of the final 9:16 video
+  - Bottom crop (9:10 ratio) captures the third head for the lower portion
+- **Intelligent Positioning**: Automatically positions crops to ensure all heads are properly captured
+- **Fallback Logic**: Falls back to standard stacked crop behavior when the special case criteria aren't met
+
+### 6. Transcription
 - Extracts audio from the video
 - Compresses to MP3 format
 - Uses OpenAI Whisper to generate SRT captions
@@ -218,7 +235,7 @@ cargo run --release -- \
   --source interview.mp4 \
   --headless \
   --smooth-percentage 5.0 \
-  --smooth-duration 60
+  --smooth-duration 2.0
 ```
 
 ### Process a two person interview with stacked crops
@@ -232,6 +249,19 @@ cargo run --release -- \
   --use-stack-crop \
   --smooth-percentage 8.0
 ```
+
+### Process a three person interview with advanced cropping
+```bash
+cargo run --release -- \
+  --object face \
+  --ver 11.0 \
+  --scale s \
+  --source three_person.mp4 \
+  --headless \
+  --use-stack-crop \
+  --smooth-percentage 8.0
+```
+**Note**: The tool automatically detects when 3 heads are similar in size and equally spaced, creating optimized crops with 9:6 and 9:10 aspect ratios that work together for the final 9:16 portrait video.
 
 ### High-quality processing with GPU acceleration
 ```bash
@@ -282,11 +312,32 @@ cargo run --release -- \
   --graphic-threshold 0.4
 ```
 
+### Use simple smoothing for faster processing
+```bash
+cargo run --release -- \
+  --object face \
+  --source video.mp4 \
+  --headless \
+  --use-simple-smoothing \
+  --smooth-percentage 15.0
+```
+
 ## Performance Tips
 
 - **GPU Acceleration**: Use `--device cuda:0` or `--device coreml` for faster processing
 - **Model Size**: Larger models (`--scale l`) provide better accuracy but slower processing
 - **Headless Mode**: Use `--headless` for faster processing without GUI overhead
+- **Smoothing Strategy**: Use `--use-simple-smoothing` for faster processing with basic smoothing
+- **Cut Detection**: Adjust `--cut-similarity` and `--cut-start` thresholds for your video content
+
+## Dependencies
+
+This project uses the following key dependencies:
+- **usls**: Computer vision library with video processing capabilities
+- **openai-api-rs**: OpenAI API client for transcription
+- **image-compare**: Image similarity comparison for cut detection
+- **ndarray**: Numerical computing for image processing
+- **tokio**: Async runtime for transcription processing
 
 ## Troubleshooting
 
@@ -296,6 +347,7 @@ cargo run --release -- \
 2. **CUDA errors**: Ensure CUDA drivers and toolkit are properly installed
 3. **Memory issues**: Try using a smaller model scale (`--scale n` or `--scale s`)
 4. **Transcription fails**: Check your OpenAI API key and internet connection
+5. **Cut detection issues**: Adjust similarity thresholds based on your video content
 
 ### Debug Mode
 

@@ -38,6 +38,7 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
         objects: &[&usls::Hbb],
         args: &Args,
         viewer: &mut Viewer,
+        smooth_duration_frames: usize,
     ) -> Result<()> {
         let current_object_count = objects.len();
         // Compare with previous crop if it exists
@@ -126,7 +127,7 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
                     ));
 
                     if is_change_crop_similar && is_change_object_count_similar {
-                        if self.history.len() == args.smooth_duration {
+                        if self.history.len() == smooth_duration_frames {
                             while let Some(frame) = self.history.pop_front() {
                                 video_processor_utils::process_and_display_crop(
                                     &frame.image,

@@ -38,9 +38,17 @@ pub trait VideoProcessor {
             .with_batch(model.batch() as _)
             .build()?;
 
+        // Convert smooth_duration from seconds to frames
+        let frame_rate = data_loader.frame_rate();
+        let smooth_duration_frames = if args.smooth_duration > 0.0 {
+            (args.smooth_duration * frame_rate as f32).round() as usize
+        } else {
+            0
+        };
+
         let mut viewer = Viewer::default()
             .with_window_scale(0.5)
-            .with_fps(data_loader.frame_rate() as usize)
+            .with_fps(frame_rate as usize)
             .with_saveout(processed_video.to_string());
 
         // build annotator
@@ -114,13 +122,14 @@ pub trait VideoProcessor {
                 // Print debug information
                 self.print_debug_info(&objects, &latest_crop, is_graphic);
 
-                if args.smooth_duration > 0 {
+                if smooth_duration_frames > 0 {
                     self.process_frame_with_smoothing(
                         &img,
                         &latest_crop,
                         &objects,
                         args,
                         &mut viewer,
+                        smooth_duration_frames,
                     )?;
                 } else {
                     video_processor_utils::process_and_display_crop(
@@ -148,6 +157,7 @@ pub trait VideoProcessor {
         objects: &[&usls::Hbb],
         args: &Args,
         viewer: &mut Viewer,
+        smooth_duration_frames: usize,
     ) -> Result<()>;
 
     /// Finalizes processing by handling any remaining frames in history (to be implemented by concrete processors)

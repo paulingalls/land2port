@@ -28,6 +28,7 @@ impl VideoProcessor for SimpleSmoothingVideoProcessor {
         _objects: &[&usls::Hbb],
         args: &Args,
         viewer: &mut Viewer,
+        _smooth_duration_frames: usize,
     ) -> Result<()> {
         // Compare with previous crop if it exists
         let crop_result = if let Some(prev_crop) = &self.previous_crop {

@@ -31,9 +31,9 @@ pub struct Args {
     #[argh(option, default = "10.0")]
     pub smooth_percentage: f32,
 
-    /// smooth duration in frames
-    #[argh(option, default = "45")]
-    pub smooth_duration: usize,
+    /// smooth duration in seconds
+    #[argh(option, default = "1.5")]
+    pub smooth_duration: f32,
 
     /// object probability threshold
     #[argh(option, default = "0.7")]
