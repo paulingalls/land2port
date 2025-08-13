@@ -77,6 +77,7 @@ cargo run --release -- \
   --ver 11.0 \
   --scale l \
   --object-prob-threshold 0.8 \
+  --object-area-threshold 0.02 \
   --use-simple-smoothing
 ```
 
@@ -88,6 +89,7 @@ cargo run --release -- \
 #### Object Detection
 - `--object <TYPE>`: Object type to detect - `face`, `head`, `ball`, `sports ball`, `frisbee`, `person`, `car`, `truck`, or `boat` (default: `face`)
 - `--object-prob-threshold <FLOAT>`: Threshold where object gets included in crop logic (default: `0.7`)
+- `--object-area-threshold <FLOAT>`: Minimum object area as percentage of frame (0.01 = 1%, ignored for ball objects) (default: `0.01`)
 
 #### Model Configuration
 - `--device <DEVICE>`: Processing device - `cpu:0`, `cuda:0`, `coreml` (default: `cpu:0`)

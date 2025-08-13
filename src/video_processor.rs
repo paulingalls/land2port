@@ -87,6 +87,9 @@ pub trait VideoProcessor {
                     detection,
                     &args.object,
                     args.object_prob_threshold,
+                    args.object_area_threshold,
+                    img.width() as f32,
+                    img.height() as f32,
                 );
 
                 let is_graphic = if objects.len() == 0 && args.keep_graphic {
