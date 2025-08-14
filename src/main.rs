@@ -33,37 +33,40 @@ async fn main() -> Result<()> {
     let output_dir = create_output_dir()?;
     println!("Created output directory: {}", output_dir);
 
-    // Verify ffmpeg is installed
-    audio::check_ffmpeg_installed()?;
-
-    // Define output paths
-    let extracted_audio = format!("{}/extracted_audio.mp4", output_dir);
-    let compressed_audio = format!("{}/compressed_audio.mp3", output_dir);
-    let srt_path = format!("{}/transcript.srt", output_dir);
     let processed_video = format!("{}/processed_video.mp4", output_dir);
-    let captioned_video = format!("{}/captioned_video.mp4", output_dir);
-    let final_video = format!("{}/final_output.mp4", output_dir);
 
-    // Extract audio from the source video
-    audio::extract_audio(&args.source, &extracted_audio)?;
-    println!("Audio extracted successfully to: {}", extracted_audio);
+    // If adding captions, prepare audio/transcription artifacts first
+    let (extracted_audio, srt_path) = if args.add_captions {
+        // Verify ffmpeg is installed
+        audio::check_ffmpeg_installed()?;
 
-    // Compress the extracted audio to MP3
-    audio::compress_to_mp3(&extracted_audio, &compressed_audio)?;
-    println!("Audio compressed to MP3: {}", compressed_audio);
+        let extracted_audio = format!("{}/extracted_audio.mp4", output_dir);
+        let compressed_audio = format!("{}/compressed_audio.mp3", output_dir);
+        let srt_path = format!("{}/transcript.srt", output_dir);
 
-    // Transcribe audio
-    println!("Transcribing audio to: {}", srt_path);
-    let transcript_config = transcript::TranscriptConfig::default();
-    transcript::transcribe_audio(
-        Path::new(&compressed_audio),
-        Path::new(&srt_path),
-        &transcript_config,
-    )
-    .await?;
-    println!("Transcription completed successfully");
+        // Extract audio from the source video
+        audio::extract_audio(&args.source, &extracted_audio)?;
+        println!("Audio extracted successfully to: {}", extracted_audio);
 
-    // build model
+        // Compress the extracted audio to MP3
+        audio::compress_to_mp3(&extracted_audio, &compressed_audio)?;
+        println!("Audio compressed to MP3: {}", compressed_audio);
+
+        // Transcribe audio
+        println!("Transcribing audio to: {}", srt_path);
+        let transcript_config = transcript::TranscriptConfig::default();
+        transcript::transcribe_audio(
+            Path::new(&compressed_audio),
+            Path::new(&srt_path),
+            &transcript_config,
+        )
+        .await?;
+        println!("Transcription completed successfully");
+
+        (Some(extracted_audio), Some(srt_path))
+    } else {
+        (None, None)
+    };
 
 
     // Choose processor based on object type and smoothing preference
@@ -79,24 +82,31 @@ async fn main() -> Result<()> {
     }
 
 
-    // Burn captions into the video
-    println!("Burning captions into video...");
-    let caption_style = audio::CaptionStyle::default();
-    audio::burn_captions(
-        &processed_video,
-        &srt_path,
-        &captioned_video,
-        Some(caption_style),
-    )?;
-    println!("Captions burned successfully");
+    if args.add_captions {
+        let captioned_video = format!("{}/captioned_video.mp4", output_dir);
+        let final_video = format!("{}/final_output.mp4", output_dir);
+    
+        // Burn captions into the video
+        println!("Burning captions into video...");
+        let caption_style = audio::CaptionStyle::default();
+        audio::burn_captions(
+            &processed_video,
+            &srt_path.as_ref().unwrap(),
+            &captioned_video,
+            Some(caption_style),
+        )?;
+        println!("Captions burned successfully");
 
-    // Add audio to the final video
-    println!("Adding audio to video...");
-    audio::combine_video_audio(&captioned_video, &extracted_audio, &final_video)?;
-    println!(
-        "Audio added successfully. Final video saved to: {}",
-        final_video
-    );
+        // Add audio to the final video
+        println!("Adding audio to video...");
+        audio::combine_video_audio(&captioned_video, &extracted_audio.as_ref().unwrap(), &final_video)?;
+        println!(
+            "Audio added successfully. Final video saved to: {}",
+            final_video
+        );
+    } else {
+        println!("Processed video saved to: {}", processed_video);
+    }
 
     Ok(())
 }

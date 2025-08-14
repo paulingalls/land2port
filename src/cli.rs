@@ -70,4 +70,8 @@ pub struct Args {
     /// graphic threshold for CLIP model classification (default: 0.3)
     #[argh(option, default = "0.3")]
     pub graphic_threshold: f32,
+
+    /// add captions: extract audio, transcribe, burn captions, and recombine
+    #[argh(switch)]
+    pub add_captions: bool,
 }

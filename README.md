@@ -1,6 +1,6 @@
 # Land2Port
 
-A powerful video processing tool that automatically detects objects like faces or heads in videos, then crops them to portrait format (9:16 aspect ratio), and adds AI-generated transcriptions. Perfect for converting landscape videos to portrait format for social media platforms like TikTok, Instagram Reels, and YouTube Shorts.
+A powerful video processing tool that automatically detects objects like faces or heads in videos, then crops them to portrait format (9:16 aspect ratio), and can add AI-generated transcriptions with the `--add-captions` flag. Perfect for converting landscape videos to portrait format for social media platforms like TikTok, Instagram Reels, and YouTube Shorts.
 
 ## Features
 
@@ -11,7 +11,7 @@ A powerful video processing tool that automatically detects objects like faces o
   - Multiple objects: Intelligently positions crops to capture all subjects
   - Stacked crops when appropriate: Creates two 9:8 crops stacked vertically for 2 or 4-5 objects
   - **Advanced 3-head cropping**: Specialized logic for 3-person interviews with optimized aspect ratios (9:6 + 9:10)
-- **🎙️ AI Transcription**: Generates SRT captions using OpenAI Whisper
+- **🎙️ AI Transcription (optional)**: Generates SRT captions using OpenAI Whisper when `--add-captions` is enabled
 - **🎨 Caption Styling**: Customizable caption appearance with fonts, colors, and positioning
 - **⚡ Smooth Transitions**: Prevents jarring crop changes with intelligent smoothing
 - **🔧 Flexible Configuration**: Extensive command-line options for customization
@@ -60,6 +60,9 @@ cargo run --release -- --source ./video/input.mp4
 
 # Process with headless mode (no GUI)
 cargo run --release -- --source ./video/input.mp4 --headless
+
+# Process and add captions (extract audio, transcribe, burn, and recombine)
+cargo run --release -- --source ./video/input.mp4 --add-captions
 ```
 
 ### Advanced Usage
@@ -113,6 +116,7 @@ cargo run --release -- \
 
 #### Processing Options
 - `--headless`: Run without GUI display
+- `--add-captions`: Extract audio, transcribe to SRT with Whisper, burn captions into the processed video, and recombine with original audio
 
 ## How It Works
 
@@ -169,23 +173,26 @@ The tool includes sophisticated logic for handling 3-head scenarios:
 - **Fallback Logic**: Falls back to standard stacked crop behavior when the special case criteria aren't met
 
 ### 6. Transcription
-- Extracts audio from the video
-- Compresses to MP3 format
+When `--add-captions` is enabled:
+- Extracts audio from the source video
+- Compresses to MP3 format for transcription
 - Uses OpenAI Whisper to generate SRT captions
-- Burns captions into the final video
+- Burns captions into the processed video and recombines with the original audio
 
 ## Output Structure
 
-The tool creates a timestamped output directory with the following files:
+The tool creates a timestamped output directory. With `--add-captions`, the following files are produced:
 
 ```
 runs/20241201_143022/
 ├── extracted_audio.mp4      # Original audio track
 ├── compressed_audio.mp3     # Compressed audio for transcription
-├── transcript.srt          # Generated captions
-├── processed_video.mp4     # Cropped video without audio
-├── captioned_video.mp4     # Video with burned-in captions
-└── final_output.mp4        # Final video with audio
+├── transcript.srt           # Generated captions
+├── processed_video.mp4      # Cropped video without audio
+├── captioned_video.mp4      # Video with burned-in captions
+└── final_output.mp4         # Final video with audio
+
+Without `--add-captions`, only `processed_video.mp4` is created.
 ```
 
 ## Configuration
