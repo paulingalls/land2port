@@ -104,8 +104,22 @@ async fn main() -> Result<()> {
             "Audio added successfully. Final video saved to: {}",
             final_video
         );
+
+        // Move final video to output_filepath if specified
+        if !args.output_filepath.is_empty() {
+            println!("Moving final video to: {}", args.output_filepath);
+            fs::rename(&final_video, &args.output_filepath)?;
+            println!("Final video moved successfully to: {}", args.output_filepath);
+        }
     } else {
         println!("Processed video saved to: {}", processed_video);
+        
+        // Move processed video to output_filepath if specified
+        if !args.output_filepath.is_empty() {
+            println!("Moving processed video to: {}", args.output_filepath);
+            fs::rename(&processed_video, &args.output_filepath)?;
+            println!("Processed video moved successfully to: {}", args.output_filepath);
+        }
     }
 
     Ok(())

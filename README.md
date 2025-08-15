@@ -63,6 +63,9 @@ cargo run --release -- --source ./video/input.mp4 --headless
 
 # Process and add captions (extract audio, transcribe, burn, and recombine)
 cargo run --release -- --source ./video/input.mp4 --add-captions
+
+# Process with captions and custom output filepath
+cargo run --release -- --source ./video/input.mp4 --add-captions --output-filepath ./final_video_with_captions.mp4
 ```
 
 ### Advanced Usage
@@ -88,6 +91,7 @@ cargo run --release -- \
 
 #### Input/Output
 - `--source <FILE>`: Input video file (default: `./video/video1.mp4`)
+- `--output-filepath <FILE>`: Output filepath for the final video (default: empty string, video stays in timestamped output directory)
 
 #### Object Detection
 - `--object <TYPE>`: Object type to detect - `face`, `head`, `ball`, `sports ball`, `frisbee`, `person`, `car`, `truck`, or `boat` (default: `face`)
@@ -319,6 +323,15 @@ cargo run --release -- \
   --cut-start 0.6 \
   --keep-graphic \
   --graphic-threshold 0.4
+```
+
+### Specify custom output filepath
+```bash
+cargo run --release -- \
+  --object face \
+  --source input.mp4 \
+  --headless \
+  --output-filepath ./my_custom_output.mp4
 ```
 
 ### Use simple smoothing for faster processing

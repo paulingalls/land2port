@@ -74,4 +74,8 @@ pub struct Args {
     /// add captions: extract audio, transcribe, burn captions, and recombine
     #[argh(switch)]
     pub add_captions: bool,
+
+    /// output filepath: if set, move the final video to this location
+    #[argh(option, default = "String::from(\"\")")]
+    pub output_filepath: String,
 }
