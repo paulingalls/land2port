@@ -105,20 +105,20 @@ async fn main() -> Result<()> {
             final_video
         );
 
-        // Move final video to output_filepath if specified
+        // Copy final video to output_filepath if specified
         if !args.output_filepath.is_empty() {
-            println!("Moving final video to: {}", args.output_filepath);
-            fs::rename(&final_video, &args.output_filepath)?;
-            println!("Final video moved successfully to: {}", args.output_filepath);
+            println!("Copying final video to: {}", args.output_filepath);
+            fs::copy(&final_video, &args.output_filepath)?;
+            println!("Final video copied successfully to: {}", args.output_filepath);
         }
     } else {
         println!("Processed video saved to: {}", processed_video);
         
-        // Move processed video to output_filepath if specified
+        // Copy processed video to output_filepath if specified
         if !args.output_filepath.is_empty() {
-            println!("Moving processed video to: {}", args.output_filepath);
-            fs::rename(&processed_video, &args.output_filepath)?;
-            println!("Processed video moved successfully to: {}", args.output_filepath);
+            println!("Copying processed video to: {}", args.output_filepath);
+            fs::copy(&processed_video, &args.output_filepath)?;
+            println!("Processed video copied successfully to: {}", args.output_filepath);
         }
     }
 
