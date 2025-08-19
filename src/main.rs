@@ -19,7 +19,7 @@ mod video_processor_utils;
 
 /// Creates a timestamped output directory and returns its path
 fn create_output_dir() -> Result<String> {
-    let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
+    let timestamp = Local::now().format("%Y%m%d_%H%M%S_%f").to_string();
     let output_dir = format!("./runs/{}", timestamp);
     fs::create_dir_all(&output_dir)?;
     Ok(output_dir)

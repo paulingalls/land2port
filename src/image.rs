@@ -1,4 +1,5 @@
 use crate::crop::CropResult;
+use crate::video_processor_utils;
 use anyhow::Result;
 use image::{RgbImage, imageops::resize};
 use usls::Image;
@@ -43,7 +44,7 @@ impl CutDetector {
         let similarity = image_compare::rgb_hybrid_compare(&rgb1, &rgb2)?;
         let current_score = similarity.score;
 
-        println!("similarity: {:?}", current_score);
+        video_processor_utils::debug_println(format_args!("similarity: {:?}", current_score));
         
         // Check if this is a cut based on new logic
         let is_cut = match self.previous_score {

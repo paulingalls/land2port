@@ -107,7 +107,7 @@ pub trait VideoProcessor {
                             .unwrap();
                         id = item_id;
                         score = item_score;
-                        println!("({}) <=> ({})", item_score * 100.0, &texts[item_id]);
+                        video_processor_utils::debug_println(format_args!("({}) <=> ({})", item_score * 100.0, &texts[item_id]));
                     }
                     id > 3 && score > args.graphic_threshold
                 } else {
