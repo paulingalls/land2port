@@ -5,7 +5,7 @@ use crate::video_processor_utils;
 use anyhow::Result;
 use ndarray::Axis;
 use usls::{
-    Annotator, Config, DType, DataLoader, Style, Viewer,
+    Annotator, Config, DType, DataLoader, Style, Viewer, perf,
     models::{Clip, YOLO},
 };
 
@@ -146,8 +146,8 @@ pub trait VideoProcessor {
         }
         self.finalize_processing(args, &mut viewer)?;
         viewer.finalize_video()?;
-        // summary
-        model.summary();
+
+        perf(false);
 
         Ok(())
     }

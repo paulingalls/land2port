@@ -775,9 +775,9 @@ dependencies = [
 
 [[package]]
 name = "fast_image_resize"
-version = "5.1.4"
+version = "5.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d372ab3252d8f162d858d675a3d88a8c33ba24a6238837c50c8851911c7e89cd"
+checksum = "b55264ccc579fc127eebf6c6c1841d0c160d79a44c8f6f97047b7bc4a9c0d1a5"
 dependencies = [
  "bytemuck",
  "cfg-if",
@@ -2437,9 +2437,9 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.13.5"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2796faa41db3ec313a31f7624d9286acf277b52de526150b7e69f3debf891ee5"
+checksum = "7231bd9b3d3d33c86b58adbac74b5ec0ad9f496b19d22801d773636feaa95f3d"
 dependencies = [
  "bytes",
  "prost-derive",
@@ -2447,12 +2447,12 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-version = "0.13.5"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
+checksum = "9120690fafc389a67ba3803df527d0ec9cbbc9cc45e4cc20b332996dfb672425"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn",
@@ -3650,7 +3650,7 @@ dependencies = [
 [[package]]
 name = "usls"
 version = "0.1.0-rc.1"
-source = "git+https://github.com/paulingalls/usls#732a4423a3f15fa93a9ffa04e6fe23c24ec6ec67"
+source = "git+https://github.com/jamjamjon/usls#c585597971cbe5c91c5fd5cb113ee871cb8e45aa"
 dependencies = [
  "ab_glyph",
  "aksr",
@@ -3671,6 +3671,7 @@ dependencies = [
  "natord",
  "ndarray",
  "ndarray-npy",
+ "once_cell",
  "ort",
  "paste",
  "prost",
