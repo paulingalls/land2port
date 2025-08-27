@@ -100,14 +100,15 @@ pub trait VideoProcessor {
                     let mut id = 0;
                     let mut score = 0.0;
                     for (_i, row) in matrix.axis_iter(Axis(0)).enumerate() {
-                        let (item_id, &item_score) = row
+                        if let Some((item_id, &item_score)) = row
                             .iter()
                             .enumerate()
-                            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
-                            .unwrap();
-                        id = item_id;
-                        score = item_score;
-                        video_processor_utils::debug_println(format_args!("({}) <=> ({})", item_score * 100.0, &texts[item_id]));
+                            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
+                        {
+                            id = item_id;
+                            score = item_score;
+                            video_processor_utils::debug_println(format_args!("({}) <=> ({})", item_score * 100.0, &texts[item_id]));
+                        }
                     }
                     id > 3 && score > args.graphic_threshold
                 } else {
