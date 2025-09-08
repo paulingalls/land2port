@@ -40,7 +40,7 @@ pub struct Args {
     pub object_prob_threshold: f32,
 
     /// object area threshold (minimum area as percentage of frame, ignored for ball objects)
-    #[argh(option, default = "0.02")]
+    #[argh(option, default = "0.005")]
     pub object_area_threshold: f32,
 
     /// cut similarity threshold (default: 0.3)
