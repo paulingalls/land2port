@@ -115,7 +115,8 @@ cargo run --release -- \
 - `--cut-start <FLOAT>`: Cut start threshold (default: `0.8`)
 
 #### Graphic Processing Options
-- `--keep-graphic`: Keep graphic elements in the video
+- `--keep-graphic`: Don't crop when primarily graphic elements in the frame (only when no objects detected)
+- `--prioritize-graphic`: Check against graphic threshold regardless of object count
 - `--graphic-threshold <FLOAT>`: Graphic threshold for CLIP model classification (default: `0.3`)
 
 #### Processing Options
@@ -165,7 +166,9 @@ To prevent jarring transitions, the tool implements intelligent smoothing:
 - Maintains 9:16 aspect ratio for portrait output
 - Processes frames at the original video's frame rate
 - Detects scene cuts to optimize processing using similarity thresholds
-- Optionally preserves graphic elements using CLIP model classification
+- Optionally preserves graphic elements using CLIP model classification:
+  - `--keep-graphic`: Only checks for graphics when no objects are detected
+  - `--prioritize-graphic`: Always checks for graphics regardless of object count
 
 ### 5. Advanced 3-Head Cropping
 The tool includes sophisticated logic for handling 3-head scenarios:
@@ -323,6 +326,16 @@ cargo run --release -- \
   --cut-start 0.6 \
   --keep-graphic \
   --graphic-threshold 0.4
+```
+
+### Process with prioritized graphic detection
+```bash
+cargo run --release -- \
+  --object face \
+  --source presentation.mp4 \
+  --headless \
+  --prioritize-graphic \
+  --graphic-threshold 0.3
 ```
 
 ### Specify custom output filepath
