@@ -67,6 +67,10 @@ pub struct Args {
     #[argh(switch)]
     pub keep_graphic: bool,
 
+    /// prioritize graphic: check against graphic threshold regardless of object count
+    #[argh(switch)]
+    pub prioritize_graphic: bool,
+
     /// graphic threshold for CLIP model classification (default: 0.3)
     #[argh(option, default = "0.3")]
     pub graphic_threshold: f32,

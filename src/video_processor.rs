@@ -92,7 +92,7 @@ pub trait VideoProcessor {
                     img.height() as f32,
                 );
 
-                let is_graphic = if objects.len() == 0 && args.keep_graphic {
+                let is_graphic = if (objects.len() == 0 && args.keep_graphic) || args.prioritize_graphic {
                     let feats_image = clip_model.encode_images(&[image.clone()])?.norm(1)?;
 
                     // use image to query texts
