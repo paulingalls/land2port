@@ -43,8 +43,8 @@ pub struct Args {
     #[argh(option, default = "0.005")]
     pub object_area_threshold: f32,
 
-    /// cut similarity threshold (default: 0.3)
-    #[argh(option, default = "0.3")]
+    /// cut similarity threshold (default: 0.4)
+    #[argh(option, default = "0.4")]
     pub cut_similarity: f64,
 
     /// cut start threshold (default: 0.8)
