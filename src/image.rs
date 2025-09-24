@@ -50,11 +50,11 @@ impl CutDetector {
         let is_cut = match self.previous_score {
             Some(prev_score) => {
                 // Only consider it a cut if current score is low AND previous score was high
-                current_score < 0.08 || (current_score < self.similarity_threshold && prev_score > self.previous_similarity_threshold)
+                current_score < 0.11 || (current_score < self.similarity_threshold && prev_score > self.previous_similarity_threshold)
             }
             None => {
                 // First comparison, use simple threshold
-                current_score < 0.08 || current_score < self.similarity_threshold
+                current_score < 0.11 || current_score < self.similarity_threshold
             }
         };
         

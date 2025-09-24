@@ -123,6 +123,51 @@ pub fn extract_objects_above_threshold<'a>(
     }
 }
 
+/// Interpolates between two CropResults over a specified number of frames
+/// 
+/// # Arguments
+/// * `start` - The starting CropResult
+/// * `destination` - The destination CropResult
+/// * `num_frames` - Number of frames to interpolate over
+/// 
+/// # Returns
+/// A vector of CropResults that smoothly transitions from start to destination.
+/// If both inputs are Single, it performs linear interpolation on the x-coordinate only,
+/// while keeping the y, width, and height from the destination crop.
+/// If either input is not Single, it returns a vector filled with the destination CropResult.
+pub fn interpolate_crop_results(
+    start: &crop::CropResult,
+    destination: &crop::CropResult,
+    num_frames: usize,
+) -> Vec<crop::CropResult> {
+    // If either crop result is not Single, return all destination crops
+    let (crop::CropResult::Single(start_crop), crop::CropResult::Single(dest_crop)) = (start, destination) else {
+        return vec![destination.clone(); num_frames];
+    };
+
+    // Handle edge case of zero or one frame
+    if num_frames == 0 {
+        return vec![];
+    }
+    if num_frames == 1 {
+        return vec![destination.clone()];
+    }
+
+    // Calculate interpolation step
+    let step = 1.0 / (num_frames - 1) as f32;
+
+    (0..num_frames)
+        .map(|i| {
+            let t = i as f32 * step;
+            
+            // Only interpolate x-coordinate, keep y, width, and height from destination
+            let x = start_crop.x + t * (dest_crop.x - start_crop.x);
+            
+            crop::CropResult::Single(crop::CropArea::new(x, dest_crop.y, dest_crop.width, dest_crop.height))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -149,5 +194,245 @@ mod tests {
         let non_ball_object_name = "face";
         let should_check_area = non_ball_object_name != "ball";
         assert!(should_check_area);
+    }
+
+    #[test]
+    fn test_interpolate_crop_results_single_to_single() {
+        use super::interpolate_crop_results;
+        use crate::crop::{CropArea, CropResult};
+        
+        let start = CropResult::Single(CropArea::new(100.0, 200.0, 300.0, 400.0));
+        let destination = CropResult::Single(CropArea::new(200.0, 300.0, 400.0, 500.0));
+        let num_frames = 5;
+        
+        let result = interpolate_crop_results(&start, &destination, num_frames);
+        
+        assert_eq!(result.len(), num_frames);
+        
+        // Check first frame (should have start x, destination y/width/height)
+        match &result[0] {
+            CropResult::Single(crop) => {
+                assert!((crop.x - 100.0).abs() < 0.001);
+                assert!((crop.y - 300.0).abs() < 0.001); // destination y
+                assert!((crop.width - 400.0).abs() < 0.001); // destination width
+                assert!((crop.height - 500.0).abs() < 0.001); // destination height
+            }
+            _ => panic!("Expected Single crop result"),
+        }
+        
+        // Check last frame (should be destination)
+        match &result[num_frames - 1] {
+            CropResult::Single(crop) => {
+                assert!((crop.x - 200.0).abs() < 0.001);
+                assert!((crop.y - 300.0).abs() < 0.001);
+                assert!((crop.width - 400.0).abs() < 0.001);
+                assert!((crop.height - 500.0).abs() < 0.001);
+            }
+            _ => panic!("Expected Single crop result"),
+        }
+        
+        // Check middle frame (should have halfway x, destination y/width/height)
+        match &result[2] {
+            CropResult::Single(crop) => {
+                assert!((crop.x - 150.0).abs() < 0.001);
+                assert!((crop.y - 300.0).abs() < 0.001); // destination y
+                assert!((crop.width - 400.0).abs() < 0.001); // destination width
+                assert!((crop.height - 500.0).abs() < 0.001); // destination height
+            }
+            _ => panic!("Expected Single crop result"),
+        }
+    }
+
+    #[test]
+    fn test_interpolate_crop_results_single_to_stacked() {
+        use super::interpolate_crop_results;
+        use crate::crop::{CropArea, CropResult};
+        
+        let start = CropResult::Single(CropArea::new(100.0, 200.0, 300.0, 400.0));
+        let destination = CropResult::Stacked(
+            CropArea::new(0.0, 0.0, 500.0, 600.0),
+            CropArea::new(500.0, 0.0, 500.0, 600.0),
+        );
+        let num_frames = 3;
+        
+        let result = interpolate_crop_results(&start, &destination, num_frames);
+        
+        assert_eq!(result.len(), num_frames);
+        
+        // All results should be the destination (stacked)
+        for crop_result in &result {
+            match crop_result {
+                CropResult::Stacked(crop1, crop2) => {
+                    assert!((crop1.x - 0.0).abs() < 0.001);
+                    assert!((crop1.y - 0.0).abs() < 0.001);
+                    assert!((crop1.width - 500.0).abs() < 0.001);
+                    assert!((crop1.height - 600.0).abs() < 0.001);
+                    assert!((crop2.x - 500.0).abs() < 0.001);
+                    assert!((crop2.y - 0.0).abs() < 0.001);
+                    assert!((crop2.width - 500.0).abs() < 0.001);
+                    assert!((crop2.height - 600.0).abs() < 0.001);
+                }
+                _ => panic!("Expected Stacked crop result"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_interpolate_crop_results_stacked_to_single() {
+        use super::interpolate_crop_results;
+        use crate::crop::{CropArea, CropResult};
+        
+        let start = CropResult::Stacked(
+            CropArea::new(0.0, 0.0, 500.0, 600.0),
+            CropArea::new(500.0, 0.0, 500.0, 600.0),
+        );
+        let destination = CropResult::Single(CropArea::new(200.0, 300.0, 400.0, 500.0));
+        let num_frames = 3;
+        
+        let result = interpolate_crop_results(&start, &destination, num_frames);
+        
+        assert_eq!(result.len(), num_frames);
+        
+        // All results should be the destination (single)
+        for crop_result in &result {
+            match crop_result {
+                CropResult::Single(crop) => {
+                    assert!((crop.x - 200.0).abs() < 0.001);
+                    assert!((crop.y - 300.0).abs() < 0.001);
+                    assert!((crop.width - 400.0).abs() < 0.001);
+                    assert!((crop.height - 500.0).abs() < 0.001);
+                }
+                _ => panic!("Expected Single crop result"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_interpolate_crop_results_stacked_to_stacked() {
+        use super::interpolate_crop_results;
+        use crate::crop::{CropArea, CropResult};
+        
+        let start = CropResult::Stacked(
+            CropArea::new(0.0, 0.0, 500.0, 600.0),
+            CropArea::new(500.0, 0.0, 500.0, 600.0),
+        );
+        let destination = CropResult::Stacked(
+            CropArea::new(100.0, 100.0, 600.0, 700.0),
+            CropArea::new(700.0, 100.0, 600.0, 700.0),
+        );
+        let num_frames = 3;
+        
+        let result = interpolate_crop_results(&start, &destination, num_frames);
+        
+        assert_eq!(result.len(), num_frames);
+        
+        // All results should be the destination (stacked)
+        for crop_result in &result {
+            match crop_result {
+                CropResult::Stacked(crop1, crop2) => {
+                    assert!((crop1.x - 100.0).abs() < 0.001);
+                    assert!((crop1.y - 100.0).abs() < 0.001);
+                    assert!((crop1.width - 600.0).abs() < 0.001);
+                    assert!((crop1.height - 700.0).abs() < 0.001);
+                    assert!((crop2.x - 700.0).abs() < 0.001);
+                    assert!((crop2.y - 100.0).abs() < 0.001);
+                    assert!((crop2.width - 600.0).abs() < 0.001);
+                    assert!((crop2.height - 700.0).abs() < 0.001);
+                }
+                _ => panic!("Expected Stacked crop result"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_interpolate_crop_results_zero_frames() {
+        use super::interpolate_crop_results;
+        use crate::crop::{CropArea, CropResult};
+        
+        let start = CropResult::Single(CropArea::new(100.0, 200.0, 300.0, 400.0));
+        let destination = CropResult::Single(CropArea::new(200.0, 300.0, 400.0, 500.0));
+        
+        let result = interpolate_crop_results(&start, &destination, 0);
+        
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_interpolate_crop_results_one_frame() {
+        use super::interpolate_crop_results;
+        use crate::crop::{CropArea, CropResult};
+        
+        let start = CropResult::Single(CropArea::new(100.0, 200.0, 300.0, 400.0));
+        let destination = CropResult::Single(CropArea::new(200.0, 300.0, 400.0, 500.0));
+        
+        let result = interpolate_crop_results(&start, &destination, 1);
+        
+        assert_eq!(result.len(), 1);
+        match &result[0] {
+            CropResult::Single(crop) => {
+                assert!((crop.x - 200.0).abs() < 0.001);
+                assert!((crop.y - 300.0).abs() < 0.001);
+                assert!((crop.width - 400.0).abs() < 0.001);
+                assert!((crop.height - 500.0).abs() < 0.001);
+            }
+            _ => panic!("Expected Single crop result"),
+        }
+    }
+
+    #[test]
+    fn test_interpolate_crop_results_identical_crops() {
+        use super::interpolate_crop_results;
+        use crate::crop::{CropArea, CropResult};
+        
+        let crop_area = CropArea::new(100.0, 200.0, 300.0, 400.0);
+        let start = CropResult::Single(crop_area.clone());
+        let destination = CropResult::Single(crop_area);
+        let num_frames = 5;
+        
+        let result = interpolate_crop_results(&start, &destination, num_frames);
+        
+        assert_eq!(result.len(), num_frames);
+        
+        // All frames should be identical (since start and destination are the same)
+        for crop_result in &result {
+            match crop_result {
+                CropResult::Single(crop) => {
+                    assert!((crop.x - 100.0).abs() < 0.001);
+                    assert!((crop.y - 200.0).abs() < 0.001);
+                    assert!((crop.width - 300.0).abs() < 0.001);
+                    assert!((crop.height - 400.0).abs() < 0.001);
+                }
+                _ => panic!("Expected Single crop result"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_interpolate_crop_results_large_frame_count() {
+        use super::interpolate_crop_results;
+        use crate::crop::{CropArea, CropResult};
+        
+        let start = CropResult::Single(CropArea::new(0.0, 0.0, 100.0, 100.0));
+        let destination = CropResult::Single(CropArea::new(1000.0, 1000.0, 200.0, 200.0));
+        let num_frames = 100;
+        
+        let result = interpolate_crop_results(&start, &destination, num_frames);
+        
+        assert_eq!(result.len(), num_frames);
+        
+        // Check that interpolation is smooth and monotonic
+        for i in 1..num_frames {
+            let prev = &result[i - 1];
+            let curr = &result[i];
+            
+            if let (CropResult::Single(prev_crop), CropResult::Single(curr_crop)) = (prev, curr) {
+                // Only X should be increasing (y, width, height stay constant)
+                assert!(curr_crop.x >= prev_crop.x);
+                // Y, width, and height should remain constant (destination values)
+                assert!((curr_crop.y - 1000.0).abs() < 0.001); // destination y
+                assert!((curr_crop.width - 200.0).abs() < 0.001); // destination width
+                assert!((curr_crop.height - 200.0).abs() < 0.001); // destination height
+            }
+        }
     }
 } 

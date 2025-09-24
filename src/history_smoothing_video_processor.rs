@@ -128,13 +128,28 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
 
                     if is_change_crop_similar && is_change_object_count_similar {
                         if self.history.len() == smooth_duration_frames {
+                            // Interpolate between prev_crop and change_crop
+                            let interpolated_crops = video_processor_utils::interpolate_crop_results(
+                                prev_crop,
+                                &change_crop,
+                                self.history.len()/2,
+                            );
+                            
+                            // Process each frame with its corresponding interpolated crop
+                            let mut frame_index = 0;
                             while let Some(frame) = self.history.pop_front() {
+                                let crop_result = if frame_index < interpolated_crops.len() {
+                                    &interpolated_crops[frame_index]
+                                } else {
+                                    &change_crop
+                                };
                                 video_processor_utils::process_and_display_crop(
                                     &frame.image,
-                                    &change_crop,
+                                    crop_result,
                                     viewer,
                                     args.headless,
                                 )?;
+                                frame_index += 1;
                             }
                             crop_result = Some(change_crop);
                         } else {
@@ -152,13 +167,26 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
                             }
                             _ => prev_crop,
                         };
+                        let interpolated_crops = video_processor_utils::interpolate_crop_results(
+                            prev_crop,
+                            &crop_to_use,
+                            std::cmp::min(smooth_duration_frames / 2, self.history.len()),
+                        );
+
+                        let mut frame_index = 0;
                         while let Some(frame) = self.history.pop_front() {
+                            let crop_result = if frame_index < interpolated_crops.len() {
+                                &interpolated_crops[frame_index]
+                            } else {
+                                &crop_to_use
+                            };
                             video_processor_utils::process_and_display_crop(
                                 &frame.image,
-                                crop_to_use,
+                                crop_result,
                                 viewer,
                                 args.headless,
                             )?;
+                            frame_index += 1;
                         }
                         crop_result = Some(crop_to_use.clone());
                     }
