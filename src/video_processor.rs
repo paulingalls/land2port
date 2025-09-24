@@ -22,14 +22,17 @@ pub trait VideoProcessor {
             .commit()?;
         let mut clip_model = Clip::new(clip_config)?;
         let texts = vec![
-            "a realistic image",
             "a photographic image",
-            "an image of a person",
-            "an image of multiple people",
             "an image of a text document",
+            "an image with a lot of text",
+            "an illustration",
+            "a drawing",
+            "a painting",
             "an image of graphics",
-            "an image of figures",
             "an image of diagrams",
+            "an image of a chart",
+            "an image of a graph",
+            "an image of a map",
         ];
         let feats_text = clip_model.encode_texts(&texts)?.norm(1)?;
 
@@ -107,21 +110,30 @@ pub trait VideoProcessor {
                         {
                             id = item_id;
                             score = item_score;
-                            video_processor_utils::debug_println(format_args!("({}) <=> ({})", item_score * 100.0, &texts[item_id]));
+                            video_processor_utils::debug_println(format_args!("({}) <=> ({} {})", item_score * 100.0, &texts[item_id], id));
                         }
                     }
-                    id > 3 && score > args.graphic_threshold
+                    id > 0 && (score > args.graphic_threshold || args.prioritize_graphic)
                 } else {
                     false
                 };
 
-                let latest_crop = crop::calculate_crop_area(
-                    args.use_stack_crop,
-                    is_graphic,
-                    img.width() as f32,
-                    img.height() as f32,
-                    &objects,
-                )?;
+                let latest_crop = if args.prioritize_graphic && is_graphic {
+                    crop::CropResult::Resize(crop::CropArea::new(
+                        0.0,
+                        0.0,
+                        img.width() as f32,
+                        img.height() as f32,
+                    ))
+                } else {
+                    crop::calculate_crop_area(
+                        args.use_stack_crop,
+                        is_graphic,
+                        img.width() as f32,
+                        img.height() as f32,
+                        &objects,
+                    )?
+                };
 
                 // Print debug information
                 self.print_debug_info(&objects, &latest_crop, is_graphic);
