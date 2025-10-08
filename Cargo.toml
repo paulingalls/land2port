@@ -6,13 +6,15 @@ edition = "2024"
 [dependencies]
 anyhow = { version = "1" }
 argh = "0.1.13"
-usls = { git = "https://github.com/jamjamjon/usls", features=["video", "coreml", "cuda", "tensorrt"] }
+usls = { path = "../../forks/usls", features=["video", "coreml", "cuda", "tensorrt"] }
 image = "0.25"
 image-compare = "0.4.2"
 openai-api-rs = "6.0.6"
 tokio = { version = "1", features = ["full"] }
 chrono = "0.4.41"
 ndarray = "0.16.1"
+slsl = { version = "0.0.5", features = ["rayon"] }
+
 
 [patch.crates-io]
 video-rs = { git = 'https://github.com/paulingalls/video-rs' }

@@ -3,10 +3,10 @@ use crate::config;
 use crate::crop;
 use crate::video_processor_utils;
 use anyhow::Result;
-use ndarray::Axis;
 use usls::{
-    Annotator, Config, DType, DataLoader, Style, Viewer, perf,
+    Annotator, Config, DType, DataLoader, Style, Viewer,
     models::{Clip, YOLO},
+    perf,
 };
 
 /// Base trait for video processors that handle cropping with different smoothing strategies
@@ -21,20 +21,36 @@ pub trait VideoProcessor {
             .with_device_all(args.device.parse()?)
             .commit()?;
         let mut clip_model = Clip::new(clip_config)?;
-        let texts = vec![
-            "a photographic image",
-            "an image of a text document",
-            "an image with a lot of text",
-            "an illustration",
-            "a drawing",
-            "a painting",
-            "an image of graphics",
-            "an image of diagrams",
-            "an image of a chart",
-            "an image of a graph",
-            "an image of a map",
-        ];
-        let feats_text = clip_model.encode_texts(&texts)?.norm(1)?;
+        let texts = if args.prioritize_graphic {
+            vec![
+                "a natural photographic image",
+                "an Al Jazeera logo in the corner",
+                "a natural photo of the outside world",
+                "a natural photo of the inside world",
+                "an image of a text document",
+                "a drawing",
+                "a painting",
+                "an image of diagrams",
+                "an image of a chart",
+                "an image of a graph",
+                "an image of a map",
+            ]
+        } else {
+            vec![
+                "a realistic image",
+                "a photographic image",
+                "an image of a person",
+                "an image of multiple people",
+                "an image of a text document",
+                "an image of graphics",
+                "an image of figures",
+                "an image of diagrams",
+            ]
+        };
+        let feats_text = clip_model.encode_texts(&texts)?;
+        let feats_text_norm = feats_text.norm_l2_keepdim(-1)?.to_dtype::<f32>()?;
+        let feats_text = (feats_text / feats_text_norm).t()?;
+        let non_graphic_index = if args.prioritize_graphic { 3 } else { 3 };
 
         // build dataloader
         let data_loader = DataLoader::new(&args.source)?
@@ -51,7 +67,7 @@ pub trait VideoProcessor {
 
         let mut viewer = Viewer::default()
             .with_window_scale(0.5)
-            .with_fps(frame_rate as usize)
+            .with_fps(frame_rate)
             .with_saveout(processed_video.to_string());
 
         // build annotator
@@ -95,28 +111,36 @@ pub trait VideoProcessor {
                     img.height() as f32,
                 );
 
-                let is_graphic = if (objects.len() == 0 && args.keep_graphic) || args.prioritize_graphic {
-                    let feats_image = clip_model.encode_images(&[image.clone()])?.norm(1)?;
-
-                    // use image to query texts
-                    let matrix = (feats_image * 100.).dot2(&feats_text)?.softmax(1)?;
-                    let mut id = 0;
-                    let mut score = 0.0;
-                    for (_i, row) in matrix.axis_iter(Axis(0)).enumerate() {
-                        if let Some((item_id, &item_score)) = row
-                            .iter()
-                            .enumerate()
-                            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
-                        {
-                            id = item_id;
-                            score = item_score;
-                            video_processor_utils::debug_println(format_args!("({}) <=> ({} {})", item_score * 100.0, &texts[item_id], id));
+                let is_graphic =
+                    if (objects.len() == 0 && args.keep_graphic) || args.prioritize_graphic {
+                        let feats_image = clip_model.encode_images(&[image.clone()])?;
+                        let feats_image_norm = feats_image.norm_l2_keepdim(-1)?.to_dtype::<f32>()?;
+                        let feats_image = feats_image / feats_image_norm;
+                
+                        // use image to query texts
+                        let matrix = (feats_image * 100.0f32).matmul(&feats_text)?.softmax(-1)?;
+                        let mut id = 0;
+                        let mut score = 0.0;
+                        for (_i, row) in matrix.iter_dim(0).enumerate() {
+                            if let Some((item_id, &item_score)) =
+                                row.iter::<f32>().enumerate().max_by(|a, b| {
+                                    a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal)
+                                })
+                            {
+                                id = item_id;
+                                score = item_score;
+                                video_processor_utils::debug_println(format_args!(
+                                    "({}) <=> ({} {})",
+                                    item_score * 100.0,
+                                    &texts[item_id],
+                                    id
+                                ));
+                            }
                         }
-                    }
-                    id > 0 && (score > args.graphic_threshold || args.prioritize_graphic)
-                } else {
-                    false
-                };
+                        id > non_graphic_index && score > args.graphic_threshold
+                    } else {
+                        false
+                    };
 
                 let latest_crop = if args.prioritize_graphic && is_graphic {
                     crop::CropResult::Resize(crop::CropArea::new(

@@ -106,7 +106,7 @@ fn vertical_y_for_heads(
 }
 
 /// Represents the result of calculating crop areas
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CropResult {
     /// A single crop area
     Single(CropArea),
@@ -710,6 +710,60 @@ pub fn is_crop_similar(crop1: &CropResult, crop2: &CropResult, width: f32, thres
             crop1.is_within_percentage(crop2, width, threshold)
         }
         _ => false, // If crop types don't match, use the new crop
+    }
+}
+
+/// Calculates the distance between two crop areas
+fn crop_area_distance(crop1: &CropArea, crop2: &CropArea) -> f32 {
+    let dx = crop1.x - crop2.x;
+    let dy = crop1.y - crop2.y;
+    let dw = crop1.width - crop2.width;
+    let dh = crop1.height - crop2.height;
+    
+    // Calculate Euclidean distance in 4D space (x, y, width, height)
+    (dx * dx + dy * dy + dw * dw + dh * dh).sqrt()
+}
+
+/// Calculates the distance between two crop results
+fn crop_result_distance(crop1: &CropResult, crop2: &CropResult) -> f32 {
+    match (crop1, crop2) {
+        (CropResult::Single(crop1), CropResult::Single(crop2)) => {
+            crop_area_distance(crop1, crop2)
+        }
+        (CropResult::Stacked(crop1_1, crop1_2), CropResult::Stacked(crop2_1, crop2_2)) => {
+            // For stacked crops, calculate the average distance of both crop areas
+            let dist1 = crop_area_distance(crop1_1, crop2_1);
+            let dist2 = crop_area_distance(crop1_2, crop2_2);
+            (dist1 + dist2) / 2.0
+        }
+        (CropResult::Resize(crop1), CropResult::Resize(crop2)) => {
+            crop_area_distance(crop1, crop2)
+        }
+        _ => f32::MAX, // If crop types don't match, consider them very different
+    }
+}
+
+/// Returns the crop that is closest to the latest crop
+/// 
+/// # Arguments
+/// * `prev_crop` - The previous crop to compare
+/// * `change_crop` - The change crop to compare  
+/// * `latest_crop` - The latest crop to compare against
+/// 
+/// # Returns
+/// The crop (prev_crop or change_crop) that is closest to latest_crop
+pub fn select_closest_crop<'a>(
+    prev_crop: &'a CropResult,
+    change_crop: &'a CropResult,
+    latest_crop: &CropResult,
+) -> &'a CropResult {
+    let prev_distance = crop_result_distance(prev_crop, latest_crop);
+    let change_distance = crop_result_distance(change_crop, latest_crop);
+    
+    if prev_distance <= change_distance {
+        prev_crop
+    } else {
+        change_crop
     }
 }
 
@@ -2020,6 +2074,53 @@ mod tests {
             CropArea::new(840.0, 60.0, 1080.0, 960.0),
         );
         assert!(is_crop_similar(&crop1, &crop2, frame_width, threshold));
+    }
+
+    #[test]
+    fn test_select_closest_crop() {
+        // Test with single crops
+        let latest_crop = CropResult::Single(CropArea::new(100.0, 100.0, 200.0, 200.0));
+        let prev_crop = CropResult::Single(CropArea::new(110.0, 110.0, 200.0, 200.0)); // Closer to latest
+        let change_crop = CropResult::Single(CropArea::new(200.0, 200.0, 200.0, 200.0)); // Farther from latest
+        
+        let result = select_closest_crop(&prev_crop, &change_crop, &latest_crop);
+        assert_eq!(result, &prev_crop);
+
+        // Test with stacked crops
+        let latest_crop = CropResult::Stacked(
+            CropArea::new(50.0, 50.0, 100.0, 100.0),
+            CropArea::new(150.0, 50.0, 100.0, 100.0),
+        );
+        let prev_crop = CropResult::Stacked(
+            CropArea::new(60.0, 60.0, 100.0, 100.0), // Closer to latest
+            CropArea::new(160.0, 60.0, 100.0, 100.0),
+        );
+        let change_crop = CropResult::Stacked(
+            CropArea::new(200.0, 200.0, 100.0, 100.0), // Farther from latest
+            CropArea::new(300.0, 200.0, 100.0, 100.0),
+        );
+        
+        let result = select_closest_crop(&prev_crop, &change_crop, &latest_crop);
+        assert_eq!(result, &prev_crop);
+
+        // Test when change_crop is closer
+        let latest_crop = CropResult::Single(CropArea::new(100.0, 100.0, 200.0, 200.0));
+        let prev_crop = CropResult::Single(CropArea::new(200.0, 200.0, 200.0, 200.0)); // Farther from latest
+        let change_crop = CropResult::Single(CropArea::new(110.0, 110.0, 200.0, 200.0)); // Closer to latest
+        
+        let result = select_closest_crop(&prev_crop, &change_crop, &latest_crop);
+        assert_eq!(result, &change_crop);
+
+        // Test with different crop types (should prefer prev_crop due to f32::MAX distance)
+        let latest_crop = CropResult::Single(CropArea::new(100.0, 100.0, 200.0, 200.0));
+        let prev_crop = CropResult::Single(CropArea::new(110.0, 110.0, 200.0, 200.0));
+        let change_crop = CropResult::Stacked(
+            CropArea::new(200.0, 200.0, 100.0, 100.0),
+            CropArea::new(300.0, 200.0, 100.0, 100.0),
+        );
+        
+        let result = select_closest_crop(&prev_crop, &change_crop, &latest_crop);
+        assert_eq!(result, &prev_crop);
     }
 
     #[test]
