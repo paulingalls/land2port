@@ -4,7 +4,7 @@ A powerful video processing tool that automatically detects objects like faces o
 
 ## Features
 
-- **🎯 Object Detection**: Uses YOLO models to detect faces, heads, footballs, sports balls, frisbees, persons, cars, trucks, or boats in video frames with high accuracy
+- **🎯 Object Detection**: Uses YOLO models to detect faces, heads, footballs, sports balls, frisbees, persons, cars, motorcycles, trucks, or boats in video frames with high accuracy
 - **📱 Portrait Cropping**: Automatically crops videos to 9:16 aspect ratio for mobile viewing
 - **🎬 Smart Cropping Logic**: 
   - Single object: Centers crop on the detected object
@@ -16,7 +16,11 @@ A powerful video processing tool that automatically detects objects like faces o
 - **⚡ Smooth Transitions**: Prevents jarring crop changes with intelligent smoothing
 - **🔧 Flexible Configuration**: Extensive command-line options for customization
 - **🎥 Cut Detection**: Intelligent scene cut detection to optimize processing
-- **🖼️ Graphic Preservation**: Optional preservation of graphic elements using CLIP model classification
+- **🖼️ Graphic Preservation**: Optional preservation of graphic elements using PaddleOCR model text detection
+- **🎯 Specialized Processors**: Multiple video processing strategies:
+  - **Ball Video Processor**: Optimized for tracking fast-moving objects like footballs with prediction algorithms
+  - **History Smoothing Processor**: Advanced smoothing using crop history and interpolation
+  - **Simple Smoothing Processor**: Fast processing with basic smoothing for performance
 
 ## Installation
 
@@ -94,9 +98,9 @@ cargo run --release -- \
 - `--output-filepath <FILE>`: Output filepath for the final video (default: empty string, video stays in timestamped output directory)
 
 #### Object Detection
-- `--object <TYPE>`: Object type to detect - `face`, `head`, `ball`, `sports ball`, `frisbee`, `person`, `car`, `truck`, or `boat` (default: `face`)
+- `--object <TYPE>`: Object type to detect - `face`, `head`, `ball`, `sports ball`, `frisbee`, `person`, `car`, `motorcycle`, `truck`, or `boat` (default: `face`)
 - `--object-prob-threshold <FLOAT>`: Threshold where object gets included in crop logic (default: `0.7`)
-- `--object-area-threshold <FLOAT>`: Minimum object area as percentage of frame (0.01 = 1%, ignored for ball objects) (default: `0.01`)
+- `--object-area-threshold <FLOAT>`: Minimum object area as percentage of frame (0.01 = 1%, ignored for ball objects) (default: `0.0025`)
 
 #### Model Configuration
 - `--device <DEVICE>`: Processing device - `cpu:0`, `cuda:0`, `coreml` (default: `cpu:0`)
@@ -106,18 +110,18 @@ cargo run --release -- \
 
 #### Cropping Options
 - `--use-stack-crop`: Enable stacked crop mode for interviews with 2 people
-- `--smooth-percentage <FLOAT>`: Smoothing threshold percentage (default: `10.0`)
-- `--smooth-duration <FLOAT>`: Smoothing duration in seconds (default: `1.5`)
+- `--smooth-percentage <FLOAT>`: Smoothing threshold percentage (default: `7.5`)
+- `--smooth-duration <FLOAT>`: Smoothing duration in seconds (default: `1.0`)
 - `--use-simple-smoothing`: Use simple smoothing instead of history smoothing
 
 #### Cut Detection Options
-- `--cut-similarity <FLOAT>`: Cut similarity threshold (default: `0.3`)
+- `--cut-similarity <FLOAT>`: Cut similarity threshold (default: `0.4`)
 - `--cut-start <FLOAT>`: Cut start threshold (default: `0.8`)
 
 #### Graphic Processing Options
 - `--keep-graphic`: Don't crop when primarily graphic elements in the frame (only when no objects detected)
 - `--prioritize-graphic`: Check against graphic threshold regardless of object count
-- `--graphic-threshold <FLOAT>`: Graphic threshold for CLIP model classification (default: `0.3`)
+- `--graphic-threshold <FLOAT>`: Graphic threshold for PaddleOCR model text detection (default: `0.009`)
 
 #### Processing Options
 - `--headless`: Run without GUI display
@@ -135,6 +139,7 @@ Use the `--object` param to select which type of object to detect. Current optio
 - **sports ball**: Detects sport balls
 - **frisbee**: Detects frisbees
 - **car**: Detects cars
+- **motorcycle**: Detects motorcycles
 - **truck**: Detects trucks
 - **boat**: Detects boats
 
@@ -166,7 +171,7 @@ To prevent jarring transitions, the tool implements intelligent smoothing:
 - Maintains 9:16 aspect ratio for portrait output
 - Processes frames at the original video's frame rate
 - Detects scene cuts to optimize processing using similarity thresholds
-- Optionally preserves graphic elements using CLIP model classification:
+- Optionally preserves graphic elements using PaddleOCR model text detection:
   - `--keep-graphic`: Only checks for graphics when no objects are detected
   - `--prioritize-graphic`: Always checks for graphics regardless of object count
 
@@ -179,7 +184,28 @@ The tool includes sophisticated logic for handling 3-head scenarios:
 - **Intelligent Positioning**: Automatically positions crops to ensure all heads are properly captured
 - **Fallback Logic**: Falls back to standard stacked crop behavior when the special case criteria aren't met
 
-### 6. Transcription
+### 6. Video Processing Strategies
+The tool automatically selects the appropriate processor based on the object type and user preferences:
+
+- **Ball Video Processor** (for `--object ball`):
+  - Specialized for tracking fast-moving objects like footballs
+  - Uses 3-frame prediction algorithm to anticipate ball position
+  - Implements cut detection to reset tracking on scene changes
+  - Optimized for sports content with rapid movement
+
+- **History Smoothing Processor** (default for most objects):
+  - Maintains crop history for intelligent smoothing
+  - Uses interpolation between crop changes
+  - Implements cut detection to optimize processing
+  - Best for interviews, presentations, and general content
+
+- **Simple Smoothing Processor** (when `--use-simple-smoothing` is enabled):
+  - Fast processing with basic smoothing
+  - Compares current crop with previous crop only
+  - Ideal for high-performance scenarios
+  - Minimal memory usage
+
+### 7. Transcription
 When `--add-captions` is enabled:
 - Extracts audio from the source video
 - Compresses to MP3 format for transcription
@@ -238,7 +264,7 @@ The tool automatically selects the appropriate model based on the `--object`, `-
 - `yolov8m-football.onnx` (v8 medium)
 
 #### Other Objects
-For other objects like `person`, `car`, `truck`, `boat`, `sports ball`, `frisbee`, the tool downloads the standard COCO-80 yolo model with class filtering.
+For other objects like `person`, `car`, `motorcycle`, `truck`, `boat`, `sports ball`, `frisbee`, the tool uses the standard COCO-80 YOLO model with class filtering.
 
 ## Examples
 
@@ -290,7 +316,7 @@ cargo run --release -- \
   --headless
 ```
 
-### Detect football/soccer balls
+### Detect football/soccer balls (uses specialized ball processor)
 ```bash
 cargo run --release -- \
   --object ball \
@@ -300,6 +326,8 @@ cargo run --release -- \
   --headless
 ```
 
+**Note**: The ball processor automatically uses 3-frame prediction and cut detection for optimal tracking of fast-moving objects.
+
 ### Detect heads instead of faces
 ```bash
 cargo run --release -- \
@@ -308,11 +336,19 @@ cargo run --release -- \
   --headless
 ```
 
-### Detect other objects (person, car, etc.)
+### Detect other objects (person, car, motorcycle, etc.)
 ```bash
 cargo run --release -- \
   --object person \
   --source street_scene.mp4 \
+  --headless
+```
+
+### Detect motorcycles
+```bash
+cargo run --release -- \
+  --object motorcycle \
+  --source motorcycle_race.mp4 \
   --headless
 ```
 
@@ -362,8 +398,13 @@ cargo run --release -- \
 - **GPU Acceleration**: Use `--device cuda:0` or `--device coreml` for faster processing
 - **Model Size**: Larger models (`--scale l`) provide better accuracy but slower processing
 - **Headless Mode**: Use `--headless` for faster processing without GUI overhead
-- **Smoothing Strategy**: Use `--use-simple-smoothing` for faster processing with basic smoothing
+- **Smoothing Strategy**: 
+  - Use `--use-simple-smoothing` for fastest processing with basic smoothing
+  - Use history smoothing (default) for best quality with smooth transitions
+  - Ball processor automatically optimizes for sports content
 - **Cut Detection**: Adjust `--cut-similarity` and `--cut-start` thresholds for your video content
+- **Object Area Threshold**: Lower values (e.g., `0.001`) detect smaller objects but may increase false positives
+- **Graphic Processing**: Use `--keep-graphic` for presentations, `--prioritize-graphic` for mixed content
 
 ## Dependencies
 
@@ -373,6 +414,9 @@ This project uses the following key dependencies:
 - **image-compare**: Image similarity comparison for cut detection
 - **ndarray**: Numerical computing for image processing
 - **tokio**: Async runtime for transcription processing
+- **argh**: Command-line argument parsing
+- **chrono**: Date and time handling for output directories
+- **slsl**: Parallel processing utilities
 
 ## Troubleshooting
 
