@@ -1,11 +1,11 @@
 use crate::cli::Args;
 use crate::crop;
 use crate::image::CutDetector;
-use crate::video_processor_utils;
 use crate::video_processor::VideoProcessor;
+use crate::video_processor_utils;
 use crate::video_processor_utils::predict_current_hbb;
 use anyhow::Result;
-use usls::{Viewer, Hbb};
+use usls::{Hbb, Viewer};
 
 /// Video processor that handles cropping with ball-specific logic
 pub struct BallVideoProcessor {
@@ -43,7 +43,7 @@ impl VideoProcessor for BallVideoProcessor {
         _smooth_duration_frames: usize,
     ) -> Result<()> {
         let current_ball_count = objects.len();
-        
+
         // Determine if there was a cut
         let is_cut = if let Some(ref most_recent) = self.most_recent_image {
             self.cut_detector.is_cut(most_recent, img)?
@@ -57,7 +57,9 @@ impl VideoProcessor for BallVideoProcessor {
         // Apply the ball-specific algorithm
         let crop_result = if is_cut {
             // If there was a cut, use latest_crop
-            video_processor_utils::debug_println(format_args!("Cut detected, using latest ball crop"));
+            video_processor_utils::debug_println(format_args!(
+                "Cut detected, using latest ball crop"
+            ));
             self.hbb_three_frames_ago = None;
             self.hbb_two_frames_ago = None;
             self.hbb_last_frame = None;
@@ -72,7 +74,9 @@ impl VideoProcessor for BallVideoProcessor {
                         .max_by(|a, b| {
                             let conf_a = a.confidence().unwrap_or(0.0);
                             let conf_b = b.confidence().unwrap_or(0.0);
-                            conf_a.partial_cmp(&conf_b).unwrap_or(std::cmp::Ordering::Equal)
+                            conf_a
+                                .partial_cmp(&conf_b)
+                                .unwrap_or(std::cmp::Ordering::Equal)
                         })
                         .unwrap();
 
@@ -103,7 +107,9 @@ impl VideoProcessor for BallVideoProcessor {
                     single_ball_crop
                 } else {
                     // Single ball detected, use latest_crop
-                    video_processor_utils::debug_println(format_args!("No cut, single ball detected, using latest ball crop"));
+                    video_processor_utils::debug_println(format_args!(
+                        "No cut, single ball detected, using latest ball crop"
+                    ));
                     self.hbb_three_frames_ago = self.hbb_two_frames_ago.take();
                     self.hbb_two_frames_ago = self.hbb_last_frame.take();
                     self.hbb_last_frame = Some(objects[0].clone());
@@ -111,8 +117,18 @@ impl VideoProcessor for BallVideoProcessor {
                 }
             } else {
                 // If no balls detected, try to predict position or use previous crop
-                if let (Some(three_frames_ago), Some(two_frames_ago), Some(last_frame)) = (&self.hbb_three_frames_ago, &self.hbb_two_frames_ago, &self.hbb_last_frame) {
-                    let current_hbb = predict_current_hbb(three_frames_ago, two_frames_ago, last_frame, img.width() as f32, img.height() as f32);
+                if let (Some(three_frames_ago), Some(two_frames_ago), Some(last_frame)) = (
+                    &self.hbb_three_frames_ago,
+                    &self.hbb_two_frames_ago,
+                    &self.hbb_last_frame,
+                ) {
+                    let current_hbb = predict_current_hbb(
+                        three_frames_ago,
+                        two_frames_ago,
+                        last_frame,
+                        img.width() as f32,
+                        img.height() as f32,
+                    );
                     let current_crop = crop::calculate_crop_area(
                         false, // Don't use stack crop for single ball
                         false, // Not graphic mode for ball processing
@@ -130,10 +146,14 @@ impl VideoProcessor for BallVideoProcessor {
                     self.hbb_two_frames_ago = self.hbb_last_frame.take();
                     self.hbb_last_frame = None;
                     if let Some(prev_crop) = &self.previous_crop {
-                        video_processor_utils::debug_println(format_args!("No cut, no balls detected, insufficient history, using previous ball crop"));
+                        video_processor_utils::debug_println(format_args!(
+                            "No cut, no balls detected, insufficient history, using previous ball crop"
+                        ));
                         prev_crop.clone()
                     } else {
-                        video_processor_utils::debug_println(format_args!("No cut, no balls detected, insufficient history, no previous crop, using latest crop"));
+                        video_processor_utils::debug_println(format_args!(
+                            "No cut, no balls detected, insufficient history, no previous crop, using latest crop"
+                        ));
                         latest_crop.clone()
                     }
                 }
@@ -149,11 +169,28 @@ impl VideoProcessor for BallVideoProcessor {
     }
 
     /// Override debug info to include ball-specific information
-    fn print_debug_info(&self, objects: &[&usls::Hbb], latest_crop: &crop::CropResult, is_graphic: bool) {
+    fn print_debug_info(
+        &self,
+        objects: &[&usls::Hbb],
+        latest_crop: &crop::CropResult,
+        is_graphic: bool,
+    ) {
         video_processor_utils::print_default_debug_info(objects, latest_crop, is_graphic);
-        video_processor_utils::debug_println(format_args!("previous_crop: {:?}", self.previous_crop));
-        video_processor_utils::debug_println(format_args!("hbb_three_frames_ago: {:?}", self.hbb_three_frames_ago));
-        video_processor_utils::debug_println(format_args!("hbb_two_frames_ago: {:?}", self.hbb_two_frames_ago));
-        video_processor_utils::debug_println(format_args!("hbb_last_frame: {:?}", self.hbb_last_frame));
+        video_processor_utils::debug_println(format_args!(
+            "previous_crop: {:?}",
+            self.previous_crop
+        ));
+        video_processor_utils::debug_println(format_args!(
+            "hbb_three_frames_ago: {:?}",
+            self.hbb_three_frames_ago
+        ));
+        video_processor_utils::debug_println(format_args!(
+            "hbb_two_frames_ago: {:?}",
+            self.hbb_two_frames_ago
+        ));
+        video_processor_utils::debug_println(format_args!(
+            "hbb_last_frame: {:?}",
+            self.hbb_last_frame
+        ));
     }
-} 
+}

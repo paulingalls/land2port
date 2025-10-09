@@ -1,5 +1,5 @@
-use usls::Image;
 use crate::crop::CropResult;
+use usls::Image;
 
 /// A structure to hold frame data including crop, image, and head count
 #[derive(Clone)]
@@ -22,7 +22,11 @@ impl CropHistory {
 
     /// Add a new frame to the history
     pub fn add(&mut self, crop: CropResult, image: Image, object_count: usize) {
-        self.frames.push(FrameData { crop, image, object_count });
+        self.frames.push(FrameData {
+            crop,
+            image,
+            object_count,
+        });
     }
 
     /// Remove and return the first frame from the history
@@ -48,4 +52,4 @@ impl CropHistory {
     pub fn is_empty(&self) -> bool {
         self.frames.is_empty()
     }
-} 
+}

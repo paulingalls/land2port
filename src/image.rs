@@ -39,32 +39,33 @@ impl CutDetector {
         // Convert both images to RgbImage for comparison
         let rgb1 = image1.to_rgb8();
         let rgb2 = image2.to_rgb8();
-        
+
         // Use rgb_image_compare to get the similarity score
         let similarity = image_compare::rgb_hybrid_compare(&rgb1, &rgb2)?;
         let current_score = similarity.score;
 
         video_processor_utils::debug_println(format_args!("similarity: {:?}", current_score));
-        
+
         // Check if this is a cut based on new logic
         let is_cut = match self.previous_score {
             Some(prev_score) => {
                 // Only consider it a cut if current score is low AND previous score was high
-                current_score < 0.11 || (current_score < self.similarity_threshold && prev_score > self.previous_similarity_threshold)
+                current_score < 0.11
+                    || (current_score < self.similarity_threshold
+                        && prev_score > self.previous_similarity_threshold)
             }
             None => {
                 // First comparison, use simple threshold
                 current_score < 0.11 || current_score < self.similarity_threshold
             }
         };
-        
+
         // Update previous score for next comparison
         self.previous_score = Some(current_score);
-        
+
         Ok(is_cut)
     }
 }
-
 
 /// Creates a new image by cropping the input image according to the crop result
 ///
@@ -148,24 +149,25 @@ pub fn create_cropped_image(
 
             // Calculate the target 9:16 aspect ratio height
             let target_height = (target_width as f32 * (16.0 / 9.0)) as u32;
-            
+
             // Determine scaling strategy based on crop aspect ratios
             let crop1_aspect = crop1.width / crop1.height;
             let crop2_aspect = crop2.width / crop2.height;
-            
-            let (top_height, bottom_height) = if (crop1_aspect - 1.5).abs() < 0.1 && (crop2_aspect - 0.9).abs() < 0.1 {
-                // Special case: 9:6 and 9:10 crops (three heads case)
-                // Scale proportionally: 6/16 and 10/16
-                let top_height = (target_height as f32 * (6.0 / 16.0)) as u32;
-                let bottom_height = (target_height as f32 * (10.0 / 16.0)) as u32;
-                (top_height, bottom_height)
-            } else {
-                // Default case: equal height crops (like 9:8 + 9:8)
-                // Scale both to half height
-                let half_height = target_height / 2;
-                (half_height, half_height)
-            };
-            
+
+            let (top_height, bottom_height) =
+                if (crop1_aspect - 1.5).abs() < 0.1 && (crop2_aspect - 0.9).abs() < 0.1 {
+                    // Special case: 9:6 and 9:10 crops (three heads case)
+                    // Scale proportionally: 6/16 and 10/16
+                    let top_height = (target_height as f32 * (6.0 / 16.0)) as u32;
+                    let bottom_height = (target_height as f32 * (10.0 / 16.0)) as u32;
+                    (top_height, bottom_height)
+                } else {
+                    // Default case: equal height crops (like 9:8 + 9:8)
+                    // Scale both to half height
+                    let half_height = target_height / 2;
+                    (half_height, half_height)
+                };
+
             // Scale both crops to fit the target width and their calculated heights
             let scaled1 = resize(
                 &crop1_img,
@@ -308,7 +310,7 @@ mod tests {
         // Verify dimensions - should be 9:16 aspect ratio
         assert_eq!(cropped.width(), 1080); // Width matches target width
         assert_eq!(cropped.height(), 1920); // 9:16 aspect ratio (1080 * 16/9)
-        
+
         // Verify that the crops are properly scaled and stacked
         // The crops should maintain their relative proportions but fit into the 9:16 frame
     }
@@ -335,12 +337,12 @@ mod tests {
         let crop1_height = 1080.0 * 0.9; // 972
         let crop1_width = crop1_height * 0.6; // 583.2
         let crop1 = CropArea::new(0.0, 54.0, crop1_width, crop1_height); // 5% from top
-        
+
         // Second crop: 70% height, 5:6 aspect ratio (shorter and wider)
         let crop2_height = 1080.0 * 0.7; // 756
         let crop2_width = crop2_height * 1.2; // 907.2
         let crop2 = CropArea::new(960.0, 162.0, crop2_width, crop2_height); // 15% from top
-        
+
         let crop_result = CropResult::Stacked(crop1, crop2);
 
         // Create the cropped image with target width of 1080
@@ -349,7 +351,7 @@ mod tests {
         // Verify dimensions - should be 9:16 aspect ratio
         assert_eq!(cropped.width(), 1080); // Width matches target width
         assert_eq!(cropped.height(), 1920); // 9:16 aspect ratio (1080 * 16/9)
-        
+
         // Verify that the crops are properly scaled and stacked
         // The crops should maintain their relative proportions but fit into the 9:16 frame
         // For the three-heads special case, the taller/skinnier crop should take more vertical space
@@ -359,11 +361,11 @@ mod tests {
     #[test]
     fn test_cut_detector() {
         let mut detector = CutDetector::new(0.15, 0.7);
-        
+
         // Create two identical images
         let mut rgb_image1 = RgbImage::new(100, 100);
         let mut rgb_image2 = RgbImage::new(100, 100);
-        
+
         // Fill both with the same pattern
         for y in 0..100 {
             for x in 0..100 {
@@ -372,15 +374,15 @@ mod tests {
                 rgb_image2.put_pixel(x, y, pixel);
             }
         }
-        
+
         let image1 = Image::from(rgb_image1);
         let image2 = Image::from(rgb_image2);
-        
+
         // First comparison - should use simple threshold
         let is_cut = detector.is_cut(&image1, &image2).unwrap();
         // Identical images should not be considered a cut
         assert!(!is_cut);
-        
+
         // Create a different image
         let mut rgb_image3 = RgbImage::new(100, 100);
         for y in 0..100 {
@@ -389,9 +391,9 @@ mod tests {
                 rgb_image3.put_pixel(x, y, pixel);
             }
         }
-        
+
         let image3 = Image::from(rgb_image3);
-        
+
         // Second comparison - should use new logic with previous score
         let is_cut = detector.is_cut(&image2, &image3).unwrap();
         // This should depend on the actual similarity scores
