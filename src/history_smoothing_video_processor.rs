@@ -42,8 +42,10 @@ impl HistorySmoothingVideoProcessor {
         // We know self.previous_crop is Some at this point since this method is only called
         // when we have a previous crop
         let prev_crop = self.previous_crop.as_ref().unwrap();
-        
-        let crop_to_use = if use_crop_selection {
+
+        let crop_to_use = if use_crop_selection && interpolation_length < 8 {
+            prev_crop
+        } else if use_crop_selection {
             match (prev_crop, change_crop) {
                 (crop::CropResult::Stacked(_, _), crop::CropResult::Single(_)) => change_crop,
                 (crop::CropResult::Resize(_), crop::CropResult::Single(_)) => change_crop,

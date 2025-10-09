@@ -4,8 +4,8 @@ use crate::crop;
 use crate::video_processor_utils;
 use anyhow::Result;
 use usls::{
-    Annotator, Config, DType, DataLoader, Style, Viewer,
-    models::{Clip, YOLO},
+    Annotator, Config, DataLoader, Style, Viewer,
+    models::{DB, YOLO},
     perf,
 };
 
@@ -16,41 +16,11 @@ pub trait VideoProcessor {
         let config = config::build_config(&args)?;
         let mut model = YOLO::new(config.commit()?)?;
 
-        let clip_config = Config::mobileclip_s0()
-            .with_dtype_all(DType::Fp16)
-            .with_device_all(args.device.parse()?)
-            .commit()?;
-        let mut clip_model = Clip::new(clip_config)?;
-        let texts = if args.prioritize_graphic {
-            vec![
-                "a natural photographic image",
-                "an Al Jazeera logo in the corner",
-                "a natural photo of the outside world",
-                "a natural photo of the inside world",
-                "an image of a text document",
-                "a drawing",
-                "a painting",
-                "an image of diagrams",
-                "an image of a chart",
-                "an image of a graph",
-                "an image of a map",
-            ]
-        } else {
-            vec![
-                "a realistic image",
-                "a photographic image",
-                "an image of a person",
-                "an image of multiple people",
-                "an image of a text document",
-                "an image of graphics",
-                "an image of figures",
-                "an image of diagrams",
-            ]
-        };
-        let feats_text = clip_model.encode_texts(&texts)?;
-        let feats_text_norm = feats_text.norm_l2_keepdim(-1)?.to_dtype::<f32>()?;
-        let feats_text = (feats_text / feats_text_norm).t()?;
-        let non_graphic_index = if args.prioritize_graphic { 3 } else { 3 };
+        // build fast model
+        let fast_config = Config::ppocr_det_v5_mobile()
+            .with_model_dtype(usls::DType::Fp16)
+            .with_model_device(args.device.parse()?);
+        let mut fast_model = DB::new(fast_config.commit()?)?;
 
         // build dataloader
         let data_loader = DataLoader::new(&args.source)?
@@ -79,6 +49,16 @@ pub trait VideoProcessor {
                     .with_palette(&usls::Color::palette_coco_80()),
             );
 
+        let textannotator = Annotator::default().with_hbb_style(
+            Style::hbb()
+                .with_visible(false)
+                .with_text_visible(false)
+                .with_thickness(1)
+                .show_confidence(false)
+                .show_id(false)
+                .show_name(false),
+        );
+
         // Common video processing logic
         for images in data_loader {
             if viewer.is_window_exist() && !viewer.is_window_open() {
@@ -95,7 +75,7 @@ pub trait VideoProcessor {
             let detections = model.forward(&images)?;
 
             for (image, detection) in images.iter().zip(detections.iter()) {
-                let img = if !args.headless {
+                let mut img = if !args.headless {
                     annotator.annotate(image, detection)?
                 } else {
                     image.clone()
@@ -113,31 +93,21 @@ pub trait VideoProcessor {
 
                 let is_graphic =
                     if (objects.len() == 0 && args.keep_graphic) || args.prioritize_graphic {
-                        let feats_image = clip_model.encode_images(&[image.clone()])?;
-                        let feats_image_norm = feats_image.norm_l2_keepdim(-1)?.to_dtype::<f32>()?;
-                        let feats_image = feats_image / feats_image_norm;
-                
-                        // use image to query texts
-                        let matrix = (feats_image * 100.0f32).matmul(&feats_text)?.softmax(-1)?;
-                        let mut id = 0;
-                        let mut score = 0.0;
-                        for (_i, row) in matrix.iter_dim(0).enumerate() {
-                            if let Some((item_id, &item_score)) =
-                                row.iter::<f32>().enumerate().max_by(|a, b| {
-                                    a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal)
-                                })
-                            {
-                                id = item_id;
-                                score = item_score;
-                                video_processor_utils::debug_println(format_args!(
-                                    "({}) <=> ({} {})",
-                                    item_score * 100.0,
-                                    &texts[item_id],
-                                    id
-                                ));
+                        let ys = fast_model.forward(&[image.clone()])?;
+
+                        if let Some(hbbs) = ys[0].hbbs() {
+                            if !args.headless {
+                                img = textannotator.annotate(&img, &ys[0])?;
                             }
+                            video_processor_utils::is_graphic_area_above_threshold(
+                                hbbs.iter(),
+                                image.width() as f32,
+                                image.height() as f32,
+                                args.graphic_threshold,
+                            )
+                        } else {
+                            false
                         }
-                        id > non_graphic_index && score > args.graphic_threshold
                     } else {
                         false
                     };

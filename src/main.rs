@@ -1,8 +1,8 @@
+use crate::video_processor::VideoProcessor;
 use anyhow::Result;
 use chrono::Local;
 use std::fs;
 use std::path::Path;
-use crate::video_processor::VideoProcessor;
 
 mod audio;
 mod ball_video_processor;
@@ -10,10 +10,10 @@ mod cli;
 mod config;
 mod crop;
 mod history;
-mod image;
-mod transcript;
 mod history_smoothing_video_processor;
+mod image;
 mod simple_smoothing_video_processor;
+mod transcript;
 mod video_processor;
 mod video_processor_utils;
 
@@ -68,7 +68,6 @@ async fn main() -> Result<()> {
         (None, None)
     };
 
-
     // Choose processor based on object type and smoothing preference
     if args.object == "ball" {
         let mut processor = ball_video_processor::BallVideoProcessor::new(&args);
@@ -77,15 +76,15 @@ async fn main() -> Result<()> {
         let mut processor = simple_smoothing_video_processor::SimpleSmoothingVideoProcessor::new();
         processor.process_video(&args, &processed_video)?;
     } else {
-        let mut processor = history_smoothing_video_processor::HistorySmoothingVideoProcessor::new(&args);
+        let mut processor =
+            history_smoothing_video_processor::HistorySmoothingVideoProcessor::new(&args);
         processor.process_video(&args, &processed_video)?;
     }
-
 
     if args.add_captions {
         let captioned_video = format!("{}/captioned_video.mp4", output_dir);
         let final_video = format!("{}/final_output.mp4", output_dir);
-    
+
         // Burn captions into the video
         println!("Burning captions into video...");
         let caption_style = audio::CaptionStyle::default();
@@ -99,7 +98,11 @@ async fn main() -> Result<()> {
 
         // Add audio to the final video
         println!("Adding audio to video...");
-        audio::combine_video_audio(&captioned_video, &extracted_audio.as_ref().unwrap(), &final_video)?;
+        audio::combine_video_audio(
+            &captioned_video,
+            &extracted_audio.as_ref().unwrap(),
+            &final_video,
+        )?;
         println!(
             "Audio added successfully. Final video saved to: {}",
             final_video
@@ -109,16 +112,22 @@ async fn main() -> Result<()> {
         if !args.output_filepath.is_empty() {
             println!("Copying final video to: {}", args.output_filepath);
             fs::copy(&final_video, &args.output_filepath)?;
-            println!("Final video copied successfully to: {}", args.output_filepath);
+            println!(
+                "Final video copied successfully to: {}",
+                args.output_filepath
+            );
         }
     } else {
         println!("Processed video saved to: {}", processed_video);
-        
+
         // Copy processed video to output_filepath if specified
         if !args.output_filepath.is_empty() {
             println!("Copying processed video to: {}", args.output_filepath);
             fs::copy(&processed_video, &args.output_filepath)?;
-            println!("Processed video copied successfully to: {}", args.output_filepath);
+            println!(
+                "Processed video copied successfully to: {}",
+                args.output_filepath
+            );
         }
     }
 

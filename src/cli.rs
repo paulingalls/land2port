@@ -71,8 +71,8 @@ pub struct Args {
     #[argh(switch)]
     pub prioritize_graphic: bool,
 
-    /// graphic threshold for CLIP model classification (default: 0.3)
-    #[argh(option, default = "0.3")]
+    /// graphic threshold: percentage of frame area covered by detected HBBs (default: 0.01)
+    #[argh(option, default = "0.009")]
     pub graphic_threshold: f32,
 
     /// add captions: extract audio, transcribe, burn captions, and recombine

@@ -35,7 +35,7 @@ impl Default for CaptionStyle {
             font_color: "FFFFFF".to_string(),
             font_name: "Arial".to_string(),
             h_align: "center".to_string(),
-            margin_bottom: 20,  // 20 pixels from bottom
+            margin_bottom: 20, // 20 pixels from bottom
             bg_color: None,
             bg_opacity: None,
             outline_color: Some("000000".to_string()),
@@ -50,9 +50,11 @@ impl Default for CaptionStyle {
 pub fn extract_audio(video_path: &str, output_path: &str) -> Result<()> {
     let status = Command::new("ffmpeg")
         .args([
-            "-i", video_path,
-            "-vn",  // Disable video
-            "-acodec", "copy",  // Copy audio stream without re-encoding
+            "-i",
+            video_path,
+            "-vn", // Disable video
+            "-acodec",
+            "copy", // Copy audio stream without re-encoding
             output_path,
         ])
         .status()
@@ -87,7 +89,7 @@ pub fn burn_captions(
     style: Option<CaptionStyle>,
 ) -> Result<()> {
     let style = style.unwrap_or_default();
-    
+
     // Build the subtitle filter string with styling options
     let mut filter_str = format!(
         "subtitles={}:force_style='FontName={},FontSize={},PrimaryColour=&H{},Alignment={},MarginV={}",
@@ -115,44 +117,28 @@ pub fn burn_captions(
         let opacity_hex = format!("{:02X}", (opacity * 255.0) as u8);
         // Format background color with opacity
         let bg_color_with_opacity = format!("{}{}", opacity_hex, bg_color);
-        
-        filter_str.push_str(&format!(
-            ",BackColour=&H{}",
-            bg_color_with_opacity
-        ));
+
+        filter_str.push_str(&format!(",BackColour=&H{}", bg_color_with_opacity));
     }
 
-    
     // Add outline color and thickness if specified
     if let Some(outline_color) = style.outline_color {
-        filter_str.push_str(&format!(
-            ",OutlineColour=&H{}",
-            outline_color
-        ));
+        filter_str.push_str(&format!(",OutlineColour=&H{}", outline_color));
     }
 
     if let Some(outline_thickness) = style.outline_thickness {
-        filter_str.push_str(&format!(
-            ",Outline={}",
-            outline_thickness
-        ));
+        filter_str.push_str(&format!(",Outline={}", outline_thickness));
     }
 
     // Add shadow color and distance if specified
     if let Some(shadow_color) = style.shadow_color {
-        filter_str.push_str(&format!(
-            ",ShadowColour=&H{}",
-            shadow_color
-        ));
+        filter_str.push_str(&format!(",ShadowColour=&H{}", shadow_color));
     }
 
     if let Some(shadow_distance) = style.shadow_distance {
-        filter_str.push_str(&format!(
-            ",Shadow={}",
-            shadow_distance
-        ));
+        filter_str.push_str(&format!(",Shadow={}", shadow_distance));
     }
-    
+
     let border_style = match (has_background, has_outline, has_shadow) {
         (true, _, _) => 3,
         (false, true, true) => 1,
@@ -160,7 +146,7 @@ pub fn burn_captions(
         (false, false, true) => 1,
         (false, false, false) => 0,
     };
-    
+
     filter_str.push_str(&format!(",BorderStyle={}", border_style));
     filter_str.push('\'');
 
@@ -168,9 +154,12 @@ pub fn burn_captions(
 
     let status = Command::new("ffmpeg")
         .args([
-            "-i", video_path,
-            "-vf", &filter_str,
-            "-c:a", "copy",  // Copy audio stream without re-encoding
+            "-i",
+            video_path,
+            "-vf",
+            &filter_str,
+            "-c:a",
+            "copy", // Copy audio stream without re-encoding
             output_path,
         ])
         .status()
@@ -184,20 +173,22 @@ pub fn burn_captions(
 }
 
 /// Combines a video file with an audio file into a new video file
-pub fn combine_video_audio(
-    video_path: &str,
-    audio_path: &str,
-    output_path: &str,
-) -> Result<()> {
+pub fn combine_video_audio(video_path: &str, audio_path: &str, output_path: &str) -> Result<()> {
     let status = Command::new("ffmpeg")
         .args([
-            "-i", video_path,  // Input video
-            "-i", audio_path,  // Input audio
-            "-c:v", "copy",    // Copy video stream without re-encoding
-            "-c:a", "copy",    // Copy audio stream without re-encoding
-            "-map", "0:v:0",   // Use video from first input
-            "-map", "1:a:0",   // Use audio from second input
-            "-shortest",       // End when shortest input ends
+            "-i",
+            video_path, // Input video
+            "-i",
+            audio_path, // Input audio
+            "-c:v",
+            "copy", // Copy video stream without re-encoding
+            "-c:a",
+            "copy", // Copy audio stream without re-encoding
+            "-map",
+            "0:v:0", // Use video from first input
+            "-map",
+            "1:a:0",     // Use audio from second input
+            "-shortest", // End when shortest input ends
             output_path,
         ])
         .status()
@@ -214,10 +205,13 @@ pub fn combine_video_audio(
 pub fn compress_to_mp3(input_path: &str, output_path: &str) -> Result<()> {
     let status = Command::new("ffmpeg")
         .args([
-            "-i", input_path,
-            "-vn",  // Disable video
-            "-acodec", "libmp3lame",  // Use MP3 codec
-            "-q:a", "6",  // Set quality (2 is high quality, range is 0-9 where lower is better)
+            "-i",
+            input_path,
+            "-vn", // Disable video
+            "-acodec",
+            "libmp3lame", // Use MP3 codec
+            "-q:a",
+            "6", // Set quality (2 is high quality, range is 0-9 where lower is better)
             output_path,
         ])
         .status()
@@ -228,4 +222,4 @@ pub fn compress_to_mp3(input_path: &str, output_path: &str) -> Result<()> {
     }
 
     Ok(())
-} 
+}
