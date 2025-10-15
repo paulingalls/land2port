@@ -38,7 +38,7 @@ pub fn combined_hbb_area<'a, I>(hbbs: I) -> f32
 where
     I: IntoIterator<Item = &'a Hbb>,
 {
-    const MIN_CONFIDENCE: f32 = 0.88;
+    const MIN_CONFIDENCE: f32 = 0.80;
 
     hbbs.into_iter()
         .filter(|hbb| {

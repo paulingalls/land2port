@@ -17,4 +17,4 @@ slsl = { version = "0.0.5", features = ["rayon"] }
 
 
 [patch.crates-io]
-video-rs = { git = 'https://github.com/paulingalls/video-rs' }
+video-rs = { git = 'https://github.com/oddity-ai/video-rs' }
