@@ -46,17 +46,18 @@ impl CutDetector {
 
         video_processor_utils::debug_println(format_args!("similarity: {:?}", current_score));
 
+        let always_cut_threshold = 0.15;
         // Check if this is a cut based on new logic
         let is_cut = match self.previous_score {
             Some(prev_score) => {
                 // Only consider it a cut if current score is low AND previous score was high
-                current_score < 0.11
+                current_score < always_cut_threshold
                     || (current_score < self.similarity_threshold
                         && prev_score > self.previous_similarity_threshold)
             }
             None => {
                 // First comparison, use simple threshold
-                current_score < 0.11 || current_score < self.similarity_threshold
+                current_score < always_cut_threshold || current_score < self.similarity_threshold
             }
         };
 
