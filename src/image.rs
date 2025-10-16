@@ -155,19 +155,27 @@ pub fn create_cropped_image(
             let crop1_aspect = crop1.width / crop1.height;
             let crop2_aspect = crop2.width / crop2.height;
 
-            let (top_height, bottom_height) =
-                if (crop1_aspect - 1.5).abs() < 0.1 && (crop2_aspect - 0.9).abs() < 0.1 {
-                    // Special case: 9:6 and 9:10 crops (three heads case)
-                    // Scale proportionally: 6/16 and 10/16
-                    let top_height = (target_height as f32 * (6.0 / 16.0)) as u32;
-                    let bottom_height = (target_height as f32 * (10.0 / 16.0)) as u32;
-                    (top_height, bottom_height)
-                } else {
-                    // Default case: equal height crops (like 9:8 + 9:8)
-                    // Scale both to half height
-                    let half_height = target_height / 2;
-                    (half_height, half_height)
-                };
+            let is_crop1_double = (crop1_aspect - 1.5).abs() < 0.1;
+            let is_crop2_double = (crop2_aspect - 1.5).abs() < 0.1;
+            let is_crop1_single = (crop1_aspect - 0.9).abs() < 0.1;
+            let is_crop2_single = (crop2_aspect - 0.9).abs() < 0.1;
+
+            let (top_height, bottom_height) = if is_crop1_double && is_crop2_single {
+                // Special case: top crop is 9:6, bottom is 9:10
+                let top_height = (target_height as f32 * (6.0 / 16.0)) as u32;
+                let bottom_height = (target_height as f32 * (10.0 / 16.0)) as u32;
+                (top_height, bottom_height)
+            } else if is_crop1_single && is_crop2_double {
+                // Special case: top crop is 9:10, bottom is 9:6 (reversed arrangement)
+                let top_height = (target_height as f32 * (10.0 / 16.0)) as u32;
+                let bottom_height = (target_height as f32 * (6.0 / 16.0)) as u32;
+                (top_height, bottom_height)
+            } else {
+                // Default case: equal height crops (like 9:8 + 9:8)
+                // Scale both to half height
+                let half_height = target_height / 2;
+                (half_height, half_height)
+            };
 
             // Scale both crops to fit the target width and their calculated heights
             let scaled1 = resize(
