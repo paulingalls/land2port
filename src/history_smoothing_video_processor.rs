@@ -36,22 +36,21 @@ impl HistorySmoothingVideoProcessor {
         latest_crop: &crop::CropResult,
         interpolation_length: usize,
         use_crop_selection: bool,
+        smooth_duration_frames: usize,
         viewer: &mut Viewer,
-        args: &Args,
+        headless: bool,
     ) -> Result<crop::CropResult> {
         // We know self.previous_crop is Some at this point since this method is only called
         // when we have a previous crop
         let prev_crop = self.previous_crop.as_ref().unwrap();
 
-        let crop_to_use = if use_crop_selection && interpolation_length < 8 {
+        let crop_to_use = if use_crop_selection && interpolation_length < smooth_duration_frames / 2 {
             prev_crop
         } else if use_crop_selection {
-            match (prev_crop, change_crop) {
-                (crop::CropResult::Stacked(_, _), crop::CropResult::Single(_)) => change_crop,
-                (crop::CropResult::Resize(_), crop::CropResult::Single(_)) => change_crop,
-                (crop::CropResult::Single(_), crop::CropResult::Stacked(_, _)) => prev_crop,
-                (crop::CropResult::Single(_), crop::CropResult::Resize(_)) => prev_crop,
-                _ => crop::select_closest_crop(prev_crop, change_crop, latest_crop),
+            if crop::crop_types_different(prev_crop, change_crop) {
+                change_crop
+            } else {
+                crop::select_closest_crop(prev_crop, change_crop, latest_crop)
             }
         } else {
             change_crop
@@ -74,7 +73,7 @@ impl HistorySmoothingVideoProcessor {
                 &frame.image,
                 crop_result,
                 viewer,
-                args.headless,
+                headless,
             )?;
             frame_index += 1;
         }
@@ -121,8 +120,9 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
                         latest_crop,
                         self.history.len(),
                         true, // use crop selection logic
+                        smooth_duration_frames,
                         viewer,
-                        args,
+                        args.headless,
                     )?;
                 }
                 object_count = current_object_count;
@@ -188,8 +188,9 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
                                 latest_crop,
                                 self.history.len(),
                                 false, // don't use crop selection logic, just use change_crop
+                                smooth_duration_frames,
                                 viewer,
-                                args,
+                                args.headless,
                             )?;
                             crop_result = Some(crop_to_use);
                         } else {
@@ -202,8 +203,9 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
                             latest_crop,
                             self.history.len(),
                             true, // use crop selection logic
+                            smooth_duration_frames,
                             viewer,
-                            args,
+                            args.headless,
                         )?;
                         crop_result = Some(crop_to_use);
                     }

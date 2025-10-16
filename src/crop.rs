@@ -594,7 +594,7 @@ pub fn calculate_crop_from_largest_head(
 /// * `frame_width` - Width of the input frame
 /// * `frame_height` - Height of the input frame
 /// * `heads` - Vector of head detections that have already been filtered by confidence threshold
-pub fn calculate_crop_area(
+pub fn calculate_crop(
     use_stack_crop: bool,
     is_graphic: bool,
     frame_width: f32,
@@ -694,6 +694,16 @@ pub fn is_crop_class_same(head_count1: usize, head_count2: usize) -> bool {
     }
 
     get_crop_class(head_count1) == get_crop_class(head_count2)
+}
+
+/// Checks if two CropResult values have different types
+pub fn crop_types_different(prev_crop: &CropResult, change_crop: &CropResult) -> bool {
+    match (prev_crop, change_crop) {
+        (CropResult::Single(_), CropResult::Single(_)) => false,
+        (CropResult::Stacked(_, _), CropResult::Stacked(_, _)) => false,
+        (CropResult::Resize(_), CropResult::Resize(_)) => false,
+        _ => true,
+    }
 }
 
 /// Checks if two crop results are similar based on a threshold percentage
@@ -1537,14 +1547,14 @@ mod tests {
 
         // Test no heads
         let heads: Vec<&Hbb> = vec![];
-        let crop = calculate_crop_area(true, false, frame_width, frame_height, &heads).unwrap();
+        let crop = calculate_crop(true, false, frame_width, frame_height, &heads).unwrap();
         assert!(matches!(crop, CropResult::Single(_)));
 
         // Test single head
         let head = Hbb::from_cxcywh(frame_width / 2.0, frame_height / 2.0, 100.0, 100.0)
             .with_confidence(0.9);
         let hbbs = vec![&head];
-        let crop = calculate_crop_area(true, false, frame_width, frame_height, &hbbs).unwrap();
+        let crop = calculate_crop(true, false, frame_width, frame_height, &hbbs).unwrap();
         assert!(matches!(crop, CropResult::Single(_)));
 
         // Test two heads
@@ -1553,7 +1563,7 @@ mod tests {
         let head2 = Hbb::from_cxcywh(3.0 * frame_width / 4.0, frame_height / 2.0, 100.0, 100.0)
             .with_confidence(0.9);
         let hbbs = vec![&head1, &head2];
-        let crop = calculate_crop_area(true, false, frame_width, frame_height, &hbbs).unwrap();
+        let crop = calculate_crop(true, false, frame_width, frame_height, &hbbs).unwrap();
         assert!(matches!(crop, CropResult::Stacked(_, _)));
 
         // Test three heads
@@ -1569,7 +1579,7 @@ mod tests {
         )
         .with_confidence(0.9);
         let hbbs = vec![&head1, &head2, &head3];
-        let crop = calculate_crop_area(true, false, frame_width, frame_height, &hbbs).unwrap();
+        let crop = calculate_crop(true, false, frame_width, frame_height, &hbbs).unwrap();
         assert!(matches!(crop, CropResult::Stacked(_, _)));
 
         // Test more than five heads
@@ -1596,7 +1606,7 @@ mod tests {
         let head6 = Hbb::from_cxcywh(frame_width - 100.0, frame_height - 100.0, 100.0, 100.0)
             .with_confidence(0.9);
         let hbbs = vec![&head1, &head2, &head3, &head4, &head5, &head6];
-        let crop = calculate_crop_area(true, false, frame_width, frame_height, &hbbs).unwrap();
+        let crop = calculate_crop(true, false, frame_width, frame_height, &hbbs).unwrap();
         assert!(matches!(crop, CropResult::Single(_)));
     }
 
@@ -1607,14 +1617,14 @@ mod tests {
 
         // Test no heads with graphic mode
         let heads: Vec<&Hbb> = vec![];
-        let crop = calculate_crop_area(true, true, frame_width, frame_height, &heads).unwrap();
+        let crop = calculate_crop(true, true, frame_width, frame_height, &heads).unwrap();
         assert!(matches!(crop, CropResult::Resize(_)));
 
         // Test single head with graphic mode (should still be Single, not Resize)
         let head = Hbb::from_cxcywh(frame_width / 2.0, frame_height / 2.0, 100.0, 100.0)
             .with_confidence(0.9);
         let hbbs = vec![&head];
-        let crop = calculate_crop_area(true, true, frame_width, frame_height, &hbbs).unwrap();
+        let crop = calculate_crop(true, true, frame_width, frame_height, &hbbs).unwrap();
         assert!(matches!(crop, CropResult::Single(_)));
 
         // Test more than five heads with graphic mode
@@ -1641,7 +1651,7 @@ mod tests {
         let head6 = Hbb::from_cxcywh(frame_width - 100.0, frame_height - 100.0, 100.0, 100.0)
             .with_confidence(0.9);
         let hbbs = vec![&head1, &head2, &head3, &head4, &head5, &head6];
-        let crop = calculate_crop_area(true, true, frame_width, frame_height, &hbbs).unwrap();
+        let crop = calculate_crop(true, true, frame_width, frame_height, &hbbs).unwrap();
         assert!(matches!(crop, CropResult::Single(_)));
     }
 
@@ -1982,7 +1992,7 @@ mod tests {
         let head2 = Hbb::from_cxcywh(3.0 * frame_width / 4.0, frame_height / 2.0, 100.0, 100.0)
             .with_confidence(0.9);
         let hbbs = vec![&head1, &head2];
-        let crop = calculate_crop_area(false, false, frame_width, frame_height, &hbbs).unwrap();
+        let crop = calculate_crop(false, false, frame_width, frame_height, &hbbs).unwrap();
         assert!(matches!(crop, CropResult::Single(_)));
 
         // Test three heads with use_stack_crop = false
@@ -1998,7 +2008,7 @@ mod tests {
         )
         .with_confidence(0.9);
         let hbbs = vec![&head1, &head2, &head3];
-        let crop = calculate_crop_area(false, false, frame_width, frame_height, &hbbs).unwrap();
+        let crop = calculate_crop(false, false, frame_width, frame_height, &hbbs).unwrap();
         assert!(matches!(crop, CropResult::Single(_)));
     }
 
@@ -2351,7 +2361,7 @@ mod tests {
         let head6 = Hbb::from_cxcywh(frame_width - 100.0, frame_height - 100.0, 100.0, 100.0)
             .with_confidence(0.9);
         let hbbs = vec![&head1, &head2, &head3, &head4, &head5, &head6];
-        let crop = calculate_crop_area(true, false, frame_width, frame_height, &hbbs).unwrap();
+        let crop = calculate_crop(true, false, frame_width, frame_height, &hbbs).unwrap();
         assert!(matches!(crop, CropResult::Single(_)));
 
         // Test six heads with one large head
@@ -2369,7 +2379,7 @@ mod tests {
         let head6 = Hbb::from_cxcywh(frame_width / 2.0, frame_height / 2.0, 300.0, 300.0)
             .with_confidence(0.9);
         let hbbs = vec![&head1, &head2, &head3, &head4, &head5, &head6];
-        let crop = calculate_crop_area(true, false, frame_width, frame_height, &hbbs).unwrap();
+        let crop = calculate_crop(true, false, frame_width, frame_height, &hbbs).unwrap();
         assert!(matches!(crop, CropResult::Stacked(_, _)));
     }
 }
