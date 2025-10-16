@@ -24,7 +24,7 @@ pub struct Args {
     pub device: String,
 
     /// scale: n, s, m, l
-    #[argh(option, default = "String::from(\"m\")")]
+    #[argh(option, default = "String::from(\"s\")")]
     pub scale: String,
 
     /// smooth percentage threshold
