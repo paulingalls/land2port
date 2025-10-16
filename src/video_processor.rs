@@ -120,7 +120,7 @@ pub trait VideoProcessor {
                         img.height() as f32,
                     ))
                 } else {
-                    crop::calculate_crop_area(
+                    crop::calculate_crop(
                         args.use_stack_crop,
                         is_graphic,
                         img.width() as f32,

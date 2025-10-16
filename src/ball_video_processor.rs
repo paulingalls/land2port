@@ -87,7 +87,7 @@ impl VideoProcessor for BallVideoProcessor {
                     ));
 
                     // Create a new crop from just the highest confidence ball
-                    let single_ball_crop = crop::calculate_crop_area(
+                    let single_ball_crop = crop::calculate_crop(
                         false, // Don't use stack crop for single ball
                         false, // Not graphic mode for ball processing
                         img.width() as f32,
@@ -129,7 +129,7 @@ impl VideoProcessor for BallVideoProcessor {
                         img.width() as f32,
                         img.height() as f32,
                     );
-                    let current_crop = crop::calculate_crop_area(
+                    let current_crop = crop::calculate_crop(
                         false, // Don't use stack crop for single ball
                         false, // Not graphic mode for ball processing
                         img.width() as f32,
