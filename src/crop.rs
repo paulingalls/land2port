@@ -261,6 +261,17 @@ pub fn calculate_three_heads_crop(
     frame_height: f32,
     heads: &[&Hbb],
 ) -> CropResult {
+    let bbox = calculate_bounding_box(heads);
+
+    if bbox.width <= frame_height * (3.0 / 4.0) {
+        let center_x = center_x_of_bbox(&bbox);
+        return CropResult::Single(make_single_crop_centered(
+            center_x,
+            frame_width,
+            frame_height,
+        ));
+    }
+
     if use_stack_crop {
         // Check if heads are roughly the same size
         let areas: Vec<f32> = heads.iter().map(|h| h.width() * h.height()).collect();
@@ -482,17 +493,6 @@ pub fn calculate_three_heads_crop(
             return CropResult::Stacked(crop1, crop2);
         }
     } else {
-        let bbox = calculate_bounding_box(heads);
-
-        if bbox.width <= frame_height * (3.0 / 4.0) {
-            let center_x = center_x_of_bbox(&bbox);
-            return CropResult::Single(make_single_crop_centered(
-                center_x,
-                frame_width,
-                frame_height,
-            ));
-        }
-
         return calculate_crop_from_largest_head(frame_width, frame_height, heads);
     }
 }
