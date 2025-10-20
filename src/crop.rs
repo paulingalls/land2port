@@ -520,7 +520,7 @@ pub fn calculate_four_or_more_heads_crop(
         head_areas
             .iter()
             .enumerate()
-            .all(|(j, &other_area)| i == j || area >= other_area * 2.5)
+            .all(|(j, &other_area)| i == j || area >= other_area * 1.5)
     });
 
     if has_dominant_head {
@@ -654,8 +654,8 @@ pub fn is_crop_class_same(head_count1: usize, head_count2: usize) -> bool {
 }
 
 /// Checks if two CropResult values have different types
-pub fn crop_types_different(prev_crop: &CropResult, change_crop: &CropResult) -> bool {
-    match (prev_crop, change_crop) {
+pub fn crop_types_different(first_crop: &CropResult, second_crop: &CropResult) -> bool {
+    match (first_crop, second_crop) {
         (CropResult::Single(_), CropResult::Single(_)) => false,
         (CropResult::Stacked(_, _), CropResult::Stacked(_, _)) => false,
         (CropResult::Resize(_), CropResult::Resize(_)) => false,
