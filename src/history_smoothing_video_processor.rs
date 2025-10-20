@@ -48,7 +48,11 @@ impl HistorySmoothingVideoProcessor {
             prev_crop
         } else if use_crop_selection {
             if crop::crop_types_different(prev_crop, change_crop) {
-                change_crop
+                if !crop::crop_types_different(prev_crop, latest_crop) {
+                    prev_crop
+                } else {
+                    change_crop
+                }
             } else {
                 crop::select_closest_crop(prev_crop, change_crop, latest_crop)
             }

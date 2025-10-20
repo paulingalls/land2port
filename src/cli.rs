@@ -36,12 +36,8 @@ pub struct Args {
     pub smooth_duration: f32,
 
     /// object probability threshold
-    #[argh(option, default = "0.7")]
+    #[argh(option, default = "0.75")]
     pub object_prob_threshold: f32,
-
-    /// object area threshold (minimum area as percentage of frame, ignored for ball objects)
-    #[argh(option, default = "0.0025")]
-    pub object_area_threshold: f32,
 
     /// cut similarity threshold (default: 0.4)
     #[argh(option, default = "0.4")]

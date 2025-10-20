@@ -137,13 +137,9 @@ pub fn print_default_debug_info(
 pub fn extract_objects_above_threshold<'a>(
     detection: &'a Y,
     object_name: &str,
-    object_prob_threshold: f32,
-    object_area_threshold: f32,
-    frame_width: f32,
-    frame_height: f32,
+    object_prob_threshold: f32
 ) -> Vec<&'a Hbb> {
     if let Some(hbbs) = detection.hbbs() {
-        let frame_area = frame_width * frame_height;
         hbbs.iter()
             .filter(|hbb| {
                 // Check confidence threshold
@@ -160,17 +156,7 @@ pub fn extract_objects_above_threshold<'a>(
                     false
                 };
 
-                // Check area threshold (skip for ball objects)
-                let meets_area_threshold = if object_name == "ball" {
-                    true // Skip area threshold for ball objects
-                } else {
-                    // Calculate area as percentage of frame
-                    let object_area = hbb.width() * hbb.height();
-                    let area_percentage = object_area / frame_area;
-                    area_percentage >= object_area_threshold
-                };
-
-                meets_threshold && matches_name && meets_area_threshold
+                meets_threshold && matches_name
             })
             .collect()
     } else {
