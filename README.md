@@ -87,7 +87,6 @@ cargo run --release -- \
   --ver 11.0 \
   --scale l \
   --object-prob-threshold 0.8 \
-  --object-area-threshold 0.02 \
   --use-simple-smoothing
 ```
 
@@ -99,12 +98,11 @@ cargo run --release -- \
 
 #### Object Detection
 - `--object <TYPE>`: Object type to detect - `face`, `head`, `ball`, `sports ball`, `frisbee`, `person`, `car`, `motorcycle`, `truck`, or `boat` (default: `face`)
-- `--object-prob-threshold <FLOAT>`: Threshold where object gets included in crop logic (default: `0.7`)
-- `--object-area-threshold <FLOAT>`: Minimum object area as percentage of frame (0.01 = 1%, ignored for ball objects) (default: `0.0025`)
+- `--object-prob-threshold <FLOAT>`: Threshold where object gets included in crop logic (default: `0.75`)
 
 #### Model Configuration
 - `--device <DEVICE>`: Processing device - `cpu:0`, `cuda:0`, `coreml` (default: `cpu:0`)
-- `--scale <SCALE>`: Model scale - `n`, `s`, `m`, `l` (default: `m`)
+- `--scale <SCALE>`: Model scale - `n`, `s`, `m`, `l` (default: `s`)
 - `--dtype <DTYPE>`: Model data type - `auto`, `f32`, `f16` (default: `auto`)
 - `--ver <VERSION>`: YOLO version (default: `11.0`)
 
@@ -253,7 +251,7 @@ The tool automatically selects the appropriate model based on the `--object`, `-
 - `yolov10l-face.onnx` (v10 large)
 - `yolov11n-face.onnx` (v11 nano)
 - `yolov11s-face.onnx` (v11 small)
-- `yolov11m-face.onnx` (v11 medium) - default
+- `yolov11m-face.onnx` (v11 medium)
 - `yolov11l-face.onnx` (v11 large)
 
 #### Head Detection Models
@@ -321,7 +319,7 @@ cargo run --release -- \
 cargo run --release -- \
   --object ball \
   --ver 8.0 \
-  --scale m \
+  --scale n \
   --source football_match.mp4 \
   --headless
 ```
@@ -361,7 +359,7 @@ cargo run --release -- \
   --cut-similarity 0.2 \
   --cut-start 0.6 \
   --keep-graphic \
-  --graphic-threshold 0.4
+  --graphic-threshold 0.009
 ```
 
 ### Process with prioritized graphic detection
@@ -371,7 +369,7 @@ cargo run --release -- \
   --source presentation.mp4 \
   --headless \
   --prioritize-graphic \
-  --graphic-threshold 0.3
+  --graphic-threshold 0.009
 ```
 
 ### Specify custom output filepath
@@ -403,7 +401,6 @@ cargo run --release -- \
   - Use history smoothing (default) for best quality with smooth transitions
   - Ball processor automatically optimizes for sports content
 - **Cut Detection**: Adjust `--cut-similarity` and `--cut-start` thresholds for your video content
-- **Object Area Threshold**: Lower values (e.g., `0.001`) detect smaller objects but may increase false positives
 - **Graphic Processing**: Use `--keep-graphic` for presentations, `--prioritize-graphic` for mixed content
 
 ## Dependencies
