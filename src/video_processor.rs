@@ -16,11 +16,11 @@ pub trait VideoProcessor {
         let config = config::build_config(&args)?;
         let mut model = YOLO::new(config.commit()?)?;
 
-        // build fast model
-        let fast_config = Config::ppocr_det_v5_mobile()
+        // build ocr model
+        let ocr_config = Config::ppocr_det_v5_mobile()
             .with_model_dtype(usls::DType::Fp16)
             .with_model_device(args.device.parse()?);
-        let mut fast_model = DB::new(fast_config.commit()?)?;
+        let mut text_model = DB::new(ocr_config.commit()?)?;
 
         // build dataloader
         let data_loader = DataLoader::new(&args.source)?
@@ -89,8 +89,8 @@ pub trait VideoProcessor {
                 );
 
                 let is_graphic =
-                    if (objects.len() == 0 && args.keep_graphic) || args.prioritize_graphic {
-                        let ys = fast_model.forward(&[image.clone()])?;
+                    if (objects.len() == 0 && args.keep_text) || args.prioritize_text {
+                        let ys = text_model.forward(&[image.clone()])?;
 
                         if let Some(hbbs) = ys[0].hbbs() {
                             if !args.headless {
@@ -100,7 +100,8 @@ pub trait VideoProcessor {
                                 hbbs.iter(),
                                 image.width() as f32,
                                 image.height() as f32,
-                                args.graphic_threshold,
+                                args.text_area_threshold,
+                                args.text_prob_threshold,
                             )
                         } else {
                             false
@@ -109,7 +110,7 @@ pub trait VideoProcessor {
                         false
                     };
 
-                let latest_crop = if args.prioritize_graphic && is_graphic {
+                let latest_crop = if args.prioritize_text && is_graphic {
                     crop::CropResult::Resize(crop::CropArea::new(
                         0.0,
                         0.0,

@@ -34,16 +34,14 @@ pub fn process_and_display_crop(
 }
 
 /// Calculates the total area covered by a collection of HBBs
-pub fn combined_hbb_area<'a, I>(hbbs: I) -> f32
+pub fn combined_hbb_area<'a, I>(hbbs: I, text_prob_threshold: f32) -> f32
 where
     I: IntoIterator<Item = &'a Hbb>,
 {
-    const MIN_CONFIDENCE: f32 = 0.80;
-
     hbbs.into_iter()
         .filter(|hbb| {
             hbb.confidence()
-                .map(|conf| conf >= MIN_CONFIDENCE)
+                .map(|conf| conf >= text_prob_threshold)
                 .unwrap_or(false)
         })
         .map(|hbb| hbb.width() * hbb.height())
@@ -56,6 +54,7 @@ pub fn is_graphic_area_above_threshold<'a, I>(
     frame_width: f32,
     frame_height: f32,
     graphic_threshold: f32,
+    text_prob_threshold: f32,
 ) -> bool
 where
     I: IntoIterator<Item = &'a Hbb>,
@@ -69,7 +68,7 @@ where
         return false;
     }
 
-    let total_area = combined_hbb_area(hbbs);
+    let total_area = combined_hbb_area(hbbs, text_prob_threshold);
     debug_println(format_args!(
         "total_area: {} >= frame_area * graphic_threshold: {}",
         total_area,
@@ -255,7 +254,7 @@ mod tests {
             Hbb::from_xywh(20.0, 20.0, 10.0, 10.0).with_confidence(0.5),
         ];
 
-        let total_area = combined_hbb_area(hbbs.iter());
+        let total_area = combined_hbb_area(hbbs.iter(), 0.85);
         let expected_area = 100.0 * 50.0 + 25.0 * 25.0; // low-confidence box excluded
 
         assert!((total_area - expected_area).abs() < 1e-3);
@@ -278,6 +277,7 @@ mod tests {
             frame_width,
             frame_height,
             0.2,
+            0.85,
         ));
 
         assert!(!is_graphic_area_above_threshold(
@@ -285,6 +285,7 @@ mod tests {
             frame_width,
             frame_height,
             0.3,
+            0.85,
         ));
     }
 
