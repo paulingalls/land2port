@@ -16,7 +16,7 @@ A powerful video processing tool that automatically detects objects like faces o
 - **⚡ Smooth Transitions**: Prevents jarring crop changes with intelligent smoothing
 - **🔧 Flexible Configuration**: Extensive command-line options for customization
 - **🎥 Cut Detection**: Intelligent scene cut detection to optimize processing
-- **🖼️ Graphic Preservation**: Optional preservation of graphic elements using PaddleOCR model text detection
+- **🖼️ Text Preservation**: Optional preservation of text elements using PaddleOCR model text detection
 - **🎯 Specialized Processors**: Multiple video processing strategies:
   - **Ball Video Processor**: Optimized for tracking fast-moving objects like footballs with prediction algorithms
   - **History Smoothing Processor**: Advanced smoothing using crop history and interpolation
@@ -116,10 +116,11 @@ cargo run --release -- \
 - `--cut-similarity <FLOAT>`: Cut similarity threshold (default: `0.4`)
 - `--cut-start <FLOAT>`: Cut start threshold (default: `0.8`)
 
-#### Graphic Processing Options
-- `--keep-graphic`: Don't crop when primarily graphic elements in the frame (only when no objects detected)
-- `--prioritize-graphic`: Check against graphic threshold regardless of object count
-- `--graphic-threshold <FLOAT>`: Graphic threshold for PaddleOCR model text detection (default: `0.009`)
+#### Text Processing Options
+- `--keep-text`: Don't crop when primarily text elements in the frame (only when no objects detected)
+- `--prioritize-text`: Check against text threshold regardless of object count
+- `--text-area-threshold <FLOAT>`: Text area threshold for PaddleOCR model text detection - percentage of frame area covered by detected text (default: `0.009`)
+- `--text-prob-threshold <FLOAT>`: Text probability threshold - minimum confidence for text detections (default: `0.85`)
 
 #### Processing Options
 - `--headless`: Run without GUI display
@@ -169,9 +170,9 @@ To prevent jarring transitions, the tool implements intelligent smoothing:
 - Maintains 9:16 aspect ratio for portrait output
 - Processes frames at the original video's frame rate
 - Detects scene cuts to optimize processing using similarity thresholds
-- Optionally preserves graphic elements using PaddleOCR model text detection:
-  - `--keep-graphic`: Only checks for graphics when no objects are detected
-  - `--prioritize-graphic`: Always checks for graphics regardless of object count
+- Optionally preserves text elements using PaddleOCR model text detection:
+  - `--keep-text`: Only checks for text when no objects are detected
+  - `--prioritize-text`: Always checks for text regardless of object count
 
 ### 5. Advanced 3-Head Cropping
 The tool includes sophisticated logic for handling 3-head scenarios:
@@ -350,7 +351,7 @@ cargo run --release -- \
   --headless
 ```
 
-### Process with cut detection and graphic preservation
+### Process with cut detection and text preservation
 ```bash
 cargo run --release -- \
   --object face \
@@ -358,18 +359,20 @@ cargo run --release -- \
   --headless \
   --cut-similarity 0.2 \
   --cut-start 0.6 \
-  --keep-graphic \
-  --graphic-threshold 0.009
+  --keep-text \
+  --text-area-threshold 0.009 \
+  --text-prob-threshold 0.85
 ```
 
-### Process with prioritized graphic detection
+### Process with prioritized text detection
 ```bash
 cargo run --release -- \
   --object face \
   --source presentation.mp4 \
   --headless \
-  --prioritize-graphic \
-  --graphic-threshold 0.009
+  --prioritize-text \
+  --text-area-threshold 0.009 \
+  --text-prob-threshold 0.85
 ```
 
 ### Specify custom output filepath
@@ -401,7 +404,7 @@ cargo run --release -- \
   - Use history smoothing (default) for best quality with smooth transitions
   - Ball processor automatically optimizes for sports content
 - **Cut Detection**: Adjust `--cut-similarity` and `--cut-start` thresholds for your video content
-- **Graphic Processing**: Use `--keep-graphic` for presentations, `--prioritize-graphic` for mixed content
+- **Text Processing**: Use `--keep-text` for presentations, `--prioritize-text` for mixed content
 
 ## Dependencies
 

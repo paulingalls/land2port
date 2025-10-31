@@ -59,17 +59,21 @@ pub struct Args {
     #[argh(switch)]
     pub use_simple_smoothing: bool,
 
-    /// keep graphic
+    /// keep text
     #[argh(switch)]
-    pub keep_graphic: bool,
+    pub keep_text: bool,
 
-    /// prioritize graphic: check against graphic threshold regardless of object count
+    /// prioritize text: check against text threshold regardless of object count
     #[argh(switch)]
-    pub prioritize_graphic: bool,
+    pub prioritize_text: bool,
 
-    /// graphic threshold: percentage of frame area covered by detected HBBs (default: 0.01)
-    #[argh(option, default = "0.009")]
-    pub graphic_threshold: f32,
+    /// text threshold: percentage of frame area covered by detected text (default: 0.01)
+    #[argh(option, default = "0.008")]
+    pub text_area_threshold: f32,
+
+    /// text probability threshold: minimum confidence for text detections (default: 0.85)
+    #[argh(option, default = "0.85")]
+    pub text_prob_threshold: f32,
 
     /// add captions: extract audio, transcribe, burn captions, and recombine
     #[argh(switch)]

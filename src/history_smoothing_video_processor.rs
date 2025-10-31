@@ -44,17 +44,21 @@ impl HistorySmoothingVideoProcessor {
         // when we have a previous crop
         let prev_crop = self.previous_crop.as_ref().unwrap();
 
-        let crop_to_use = if use_crop_selection && interpolation_length < smooth_duration_frames / 2 {
-            prev_crop
-        } else if use_crop_selection {
-            if crop::crop_types_different(prev_crop, change_crop) {
+        let crop_to_use = if use_crop_selection {
+            if interpolation_length < smooth_duration_frames/4 {
+                prev_crop
+            } else if crop::crop_types_different(prev_crop, change_crop) {
                 if !crop::crop_types_different(prev_crop, latest_crop) {
                     prev_crop
                 } else {
                     change_crop
                 }
             } else {
-                crop::select_closest_crop(prev_crop, change_crop, latest_crop)
+                if crop::crop_types_different(prev_crop, latest_crop) {
+                    change_crop
+                } else {
+                    crop::select_closest_crop(prev_crop, change_crop, latest_crop)
+                }
             }
         } else {
             change_crop
