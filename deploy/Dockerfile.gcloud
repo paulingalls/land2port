@@ -1,0 +1,75 @@
+# Stage 0: TensorRT libraries source
+FROM --platform=linux/amd64 nvcr.io/nvidia/tensorrt:24.12-py3 AS tensorrt
+
+# Stage 1: Builder
+FROM --platform=linux/amd64 nvidia/cuda:12.2.2-cudnn8-devel-ubuntu22.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    cmake \
+    clang \
+    pkg-config \
+    build-essential \
+    libavformat-dev \
+    libavcodec-dev \
+    libavdevice-dev \
+    libavutil-dev \
+    libswscale-dev \
+    libswresample-dev \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+WORKDIR /build
+
+# Copy source files
+COPY Cargo.toml Cargo.lock build.rs ./
+COPY src/ src/
+
+# Strip coreml feature (macOS-only), keep cuda and tensorrt
+RUN sed -i 's/features=\["video", "coreml", "cuda", "tensorrt"\]/features=["video", "cuda", "tensorrt"]/' Cargo.toml
+
+# Build release binary
+RUN cargo build --release
+
+# Stage 2: Runtime
+FROM --platform=linux/amd64 nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install ffmpeg and cuDNN 9
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libcudnn9-cuda-12 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy compiled binary
+COPY --from=builder /build/target/release/land2port ./land2port
+
+# Copy ONNX Runtime shared libraries (including TensorRT provider)
+COPY --from=builder /root/.cache/ort.pyke.io/dfbin/x86_64-unknown-linux-gnu/*/onnxruntime/lib/libonnxruntime_providers_shared.so /usr/lib/
+COPY --from=builder /root/.cache/ort.pyke.io/dfbin/x86_64-unknown-linux-gnu/*/onnxruntime/lib/libonnxruntime_providers_cuda.so /usr/lib/
+COPY --from=builder /root/.cache/ort.pyke.io/dfbin/x86_64-unknown-linux-gnu/*/onnxruntime/lib/libonnxruntime_providers_tensorrt.so /usr/lib/
+
+# Copy TensorRT runtime libraries from NGC container
+COPY --from=tensorrt /usr/lib/x86_64-linux-gnu/libnvinfer.so.10 /usr/lib/
+COPY --from=tensorrt /usr/lib/x86_64-linux-gnu/libnvinfer_plugin.so.10 /usr/lib/
+COPY --from=tensorrt /usr/lib/x86_64-linux-gnu/libnvonnxparser.so.10 /usr/lib/
+COPY --from=tensorrt /usr/lib/x86_64-linux-gnu/libnvinfer_builder_resource.so.10.7.0 /usr/lib/
+
+ENV LD_LIBRARY_PATH="/usr/lib:${LD_LIBRARY_PATH}"
+
+# Copy ONNX model files
+COPY model/ ./model/
+
+ENTRYPOINT ["./land2port"]
+CMD ["--headless", "--device", "trt:0"]
