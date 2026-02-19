@@ -67,10 +67,8 @@ gcloud run jobs create "${JOB_NAME}" \
     --no-gpu-zonal-redundancy \
     --task-timeout=3600 \
     --max-retries=0 \
-    --add-volume=name=input,type=cloud-storage,bucket="${BUCKET_NAME}" \
-    --add-volume=name=output,type=cloud-storage,bucket="${BUCKET_NAME}" \
-    --add-volume-mount=volume=input,mount-path=/input \
-    --add-volume-mount=volume=output,mount-path=/output
+    --add-volume=name=data,type=cloud-storage,bucket="${BUCKET_NAME}" \
+    --add-volume-mount=volume=data,mount-path=/data
 
 # Grant storage access to the default compute service account
 echo "==> Granting storage access to compute service account..."
@@ -88,7 +86,7 @@ echo "  ./deploy/upload-video.sh ./video/input.mp4"
 echo ""
 echo "Execute the job:"
 echo "  gcloud run jobs execute ${JOB_NAME} --region=${REGION} \\"
-echo "    --args=\"--source,/input/input/VIDEO.mp4,--output-filepath,/output/output/VIDEO.mp4,--headless,--device,trt:0\""
+echo "    --args=\"--source,/data/input/VIDEO.mp4,--output-filepath,/data/output/VIDEO.mp4,--headless,--device,trt:0\""
 echo ""
 echo "Download the result:"
 echo "  ./deploy/download-video.sh VIDEO.mp4"
