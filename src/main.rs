@@ -110,6 +110,9 @@ async fn main() -> Result<()> {
 
         // Copy final video to output_filepath if specified
         if !args.output_filepath.is_empty() {
+            if let Some(parent) = Path::new(&args.output_filepath).parent() {
+                fs::create_dir_all(parent)?;
+            }
             println!("Copying final video to: {}", args.output_filepath);
             fs::copy(&final_video, &args.output_filepath)?;
             println!(
@@ -122,6 +125,9 @@ async fn main() -> Result<()> {
 
         // Copy processed video to output_filepath if specified
         if !args.output_filepath.is_empty() {
+            if let Some(parent) = Path::new(&args.output_filepath).parent() {
+                fs::create_dir_all(parent)?;
+            }
             println!("Copying processed video to: {}", args.output_filepath);
             fs::copy(&processed_video, &args.output_filepath)?;
             println!(
