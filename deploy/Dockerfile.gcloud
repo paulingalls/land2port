@@ -71,5 +71,8 @@ ENV LD_LIBRARY_PATH="/usr/lib:${LD_LIBRARY_PATH}"
 # Copy ONNX model files
 COPY model/ ./model/
 
-ENTRYPOINT ["./land2port"]
+COPY deploy/entrypoint.sh ./entrypoint.sh
+RUN chmod +x entrypoint.sh
+
+ENTRYPOINT ["./entrypoint.sh"]
 CMD ["--headless", "--device", "trt:0"]
