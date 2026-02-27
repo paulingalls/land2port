@@ -41,7 +41,8 @@ docker push "${IMAGE_URI}"
 echo "==> Updating Cloud Run Job..."
 gcloud run jobs update "${JOB_NAME}" \
     --image="${IMAGE_URI}" \
-    --region="${REGION}"
+    --region="${REGION}" \
+    --set-env-vars=XDG_CACHE_HOME=/data/cache
 
 echo ""
 echo "==> Done! Job '${JOB_NAME}' updated with latest image."
