@@ -67,6 +67,7 @@ gcloud run jobs create "${JOB_NAME}" \
     --no-gpu-zonal-redundancy \
     --task-timeout=3600 \
     --max-retries=0 \
+    --set-env-vars=XDG_CACHE_HOME=/data/cache \
     --add-volume=name=data,type=cloud-storage,bucket="${BUCKET_NAME}" \
     --add-volume-mount=volume=data,mount-path=/data
 
