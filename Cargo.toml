@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 anyhow = { version = "1" }
 argh = "0.1.13"
-usls = { git = "https://github.com/paulingalls/usls", features=["video", "coreml", "cuda", "tensorrt"] }
+usls = { git = "https://github.com/jamjamjon/usls", default-features = false, features = ["video", "viewer", "vision", "annotator"] }
 image = "0.25"
 image-compare = "0.4.2"
 openai-api-rs = "6.0.6"
@@ -15,6 +15,16 @@ chrono = "0.4.41"
 ndarray = "0.16.1"
 slsl = { version = "0.0.5", features = ["rayon"] }
 
+# Apple Silicon Mac — prebuilt binaries available
+[target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
+usls = { git = "https://github.com/jamjamjon/usls", features = ["coreml", "ort-download-binaries"] }
+
+# Intel Mac — no prebuilt binaries, load at runtime
+[target.'cfg(all(target_os = "macos", target_arch = "x86_64"))'.dependencies]
+usls = { git = "https://github.com/jamjamjon/usls", features = ["coreml", "ort-load-dynamic"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+usls = { git = "https://github.com/jamjamjon/usls", features = ["cuda", "tensorrt", "ort-download-binaries"] }
 
 [patch.crates-io]
-video-rs = { git = 'https://github.com/oddity-ai/video-rs' }
+video-rs = { git = 'https://github.com/oddity-ai/video-rs', rev = '784a41b' }

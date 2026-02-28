@@ -138,29 +138,25 @@ pub fn extract_objects_above_threshold<'a>(
     object_name: &str,
     object_prob_threshold: f32
 ) -> Vec<&'a Hbb> {
-    if let Some(hbbs) = detection.hbbs() {
-        hbbs.iter()
-            .filter(|hbb| {
-                // Check confidence threshold
-                let meets_threshold = if let Some(confidence) = hbb.confidence() {
-                    confidence >= object_prob_threshold
-                } else {
-                    false
-                };
+    detection.hbbs.iter()
+        .filter(|hbb| {
+            // Check confidence threshold
+            let meets_threshold = if let Some(confidence) = hbb.confidence() {
+                confidence >= object_prob_threshold
+            } else {
+                false
+            };
 
-                // Check name matching
-                let matches_name = if let Some(name) = hbb.name() {
-                    name == object_name
-                } else {
-                    false
-                };
+            // Check name matching
+            let matches_name = if let Some(name) = hbb.name() {
+                name == object_name
+            } else {
+                false
+            };
 
-                meets_threshold && matches_name
-            })
-            .collect()
-    } else {
-        vec![]
-    }
+            meets_threshold && matches_name
+        })
+        .collect()
 }
 
 /// Interpolates between two CropResults over a specified number of frames
