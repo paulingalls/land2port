@@ -33,8 +33,9 @@ WORKDIR /build
 COPY Cargo.toml Cargo.lock build.rs ./
 COPY src/ src/
 
-# Strip coreml feature (macOS-only), keep cuda and tensorrt
-RUN sed -i 's/features=\["video", "coreml", "cuda", "tensorrt"\]/features=["video", "cuda", "tensorrt"]/' Cargo.toml
+# Device features are platform-gated in Cargo.toml: coreml is macOS-only and
+# cuda/tensorrt are Linux-only, so this build picks up CUDA/TensorRT and never
+# pulls coreml — no Cargo.toml patching needed.
 
 # Build release binary
 RUN cargo build --release
