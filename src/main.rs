@@ -16,6 +16,7 @@ mod simple_smoothing_video_processor;
 mod transcript;
 mod video_processor;
 mod video_processor_utils;
+mod video_sink;
 
 /// Creates a timestamped output directory and returns its path
 fn create_output_dir() -> Result<String> {
