@@ -4,8 +4,8 @@ use crate::history;
 use crate::image::CutDetector;
 use crate::video_processor::VideoProcessor;
 use crate::video_processor_utils;
+use crate::video_sink::VideoSink;
 use anyhow::Result;
-use usls::Viewer;
 
 /// Video processor that handles cropping with history smoothing
 pub struct HistorySmoothingVideoProcessor {
@@ -37,7 +37,7 @@ impl HistorySmoothingVideoProcessor {
         interpolation_length: usize,
         use_crop_selection: bool,
         smooth_duration_frames: usize,
-        viewer: &mut Viewer,
+        viewer: &mut VideoSink,
         headless: bool,
     ) -> Result<crop::CropResult> {
         // We know self.previous_crop is Some at this point since this method is only called
@@ -98,7 +98,7 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
         latest_crop: &crop::CropResult,
         objects: &[&usls::Hbb],
         args: &Args,
-        viewer: &mut Viewer,
+        viewer: &mut VideoSink,
         smooth_duration_frames: usize,
     ) -> Result<()> {
         let current_object_count = objects.len();
@@ -263,7 +263,7 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
     }
 
     /// Finalizes processing by handling any remaining frames in history
-    fn finalize_processing(&mut self, args: &Args, viewer: &mut Viewer) -> Result<()> {
+    fn finalize_processing(&mut self, args: &Args, viewer: &mut VideoSink) -> Result<()> {
         // Process any remaining frames in the history
         if !self.history.is_empty() {
             video_processor_utils::debug_println(format_args!(

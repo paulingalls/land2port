@@ -2,8 +2,8 @@ use crate::cli::Args;
 use crate::crop;
 use crate::video_processor::VideoProcessor;
 use crate::video_processor_utils;
+use crate::video_sink::VideoSink;
 use anyhow::Result;
-use usls::Viewer;
 
 /// Video processor that handles cropping with simple smoothing (no history)
 pub struct SimpleSmoothingVideoProcessor {
@@ -27,7 +27,7 @@ impl VideoProcessor for SimpleSmoothingVideoProcessor {
         latest_crop: &crop::CropResult,
         _objects: &[&usls::Hbb],
         args: &Args,
-        viewer: &mut Viewer,
+        viewer: &mut VideoSink,
         _smooth_duration_frames: usize,
     ) -> Result<()> {
         // Compare with previous crop if it exists
