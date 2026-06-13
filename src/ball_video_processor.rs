@@ -4,8 +4,9 @@ use crate::image::CutDetector;
 use crate::video_processor::VideoProcessor;
 use crate::video_processor_utils;
 use crate::video_processor_utils::predict_current_hbb;
+use crate::video_sink::VideoSink;
 use anyhow::Result;
-use usls::{Hbb, Viewer};
+use usls::Hbb;
 
 /// Video processor that handles cropping with ball-specific logic
 pub struct BallVideoProcessor {
@@ -39,7 +40,7 @@ impl VideoProcessor for BallVideoProcessor {
         latest_crop: &crop::CropResult,
         objects: &[&usls::Hbb],
         args: &Args,
-        viewer: &mut Viewer,
+        viewer: &mut VideoSink,
         _smooth_duration_frames: usize,
     ) -> Result<()> {
         let current_ball_count = objects.len();

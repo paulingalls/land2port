@@ -2,11 +2,12 @@ use crate::cli::Args;
 use crate::config;
 use crate::crop;
 use crate::video_processor_utils;
+use crate::video_sink::{self, VideoSink};
 use anyhow::Result;
 use usls::{
-    Annotator, Config, DataLoader, Style, Viewer,
+    Annotator, Config, DataLoader, HbbStyle, Model, ObbStyle,
     models::{DB, YOLO},
-    perf,
+    perf_chart,
 };
 
 /// Base trait for video processors that handle cropping with different smoothing strategies
@@ -25,32 +26,30 @@ pub trait VideoProcessor {
         // build dataloader
         let data_loader = DataLoader::new(&args.source)?
             .with_batch(model.batch() as _)
-            .build()?;
+            .stream()?;
 
-        // Convert smooth_duration from seconds to frames
-        let frame_rate = data_loader.frame_rate();
+        // The DataLoader no longer exposes the source frame rate, so probe it
+        // directly. Used both for smoothing math and for output frame timing.
+        let frame_rate = video_sink::probe_fps(&args.source);
         let smooth_duration_frames = if args.smooth_duration > 0.0 {
             (args.smooth_duration * frame_rate as f32).round() as usize
         } else {
             0
         };
 
-        let mut viewer = Viewer::default()
-            .with_window_scale(0.5)
-            .with_fps(frame_rate)
-            .with_saveout(processed_video.to_string());
+        let mut viewer = VideoSink::new(processed_video.to_string(), frame_rate);
 
         // build annotator
         let annotator = Annotator::default()
-            .with_obb_style(Style::obb().with_draw_fill(true))
+            .with_obb_style(ObbStyle::default().with_draw_fill(true))
             .with_hbb_style(
-                Style::hbb()
+                HbbStyle::default()
                     .with_draw_fill(true)
                     .with_palette(&usls::Color::palette_coco_80()),
             );
 
         let textannotator = Annotator::default().with_hbb_style(
-            Style::hbb()
+            HbbStyle::default()
                 .with_visible(false)
                 .with_text_visible(false)
                 .with_thickness(1)
@@ -60,8 +59,8 @@ pub trait VideoProcessor {
         );
 
         // Common video processing logic
-        for images in data_loader {
-            if viewer.is_window_exist() && !viewer.is_window_open() {
+        for images in &data_loader {
+            if viewer.is_window_exist_and_closed() {
                 break;
             }
 
@@ -92,12 +91,12 @@ pub trait VideoProcessor {
                     if (objects.len() == 0 && args.keep_text) || args.prioritize_text {
                         let ys = text_model.forward(&[image.clone()])?;
 
-                        if let Some(hbbs) = ys[0].hbbs() {
+                        if !ys[0].hbbs.is_empty() {
                             if !args.headless {
                                 img = textannotator.annotate(&img, &ys[0])?;
                             }
                             video_processor_utils::is_graphic_area_above_threshold(
-                                hbbs.iter(),
+                                ys[0].hbbs.iter(),
                                 image.width() as f32,
                                 image.height() as f32,
                                 args.text_area_threshold,
@@ -150,9 +149,9 @@ pub trait VideoProcessor {
             }
         }
         self.finalize_processing(args, &mut viewer)?;
-        viewer.finalize_video()?;
+        viewer.finalize()?;
 
-        perf(false);
+        perf_chart();
 
         Ok(())
     }
@@ -164,12 +163,12 @@ pub trait VideoProcessor {
         latest_crop: &crop::CropResult,
         objects: &[&usls::Hbb],
         args: &Args,
-        viewer: &mut Viewer,
+        viewer: &mut VideoSink,
         smooth_duration_frames: usize,
     ) -> Result<()>;
 
     /// Finalizes processing by handling any remaining frames in history (to be implemented by concrete processors)
-    fn finalize_processing(&mut self, _args: &Args, _viewer: &mut Viewer) -> Result<()> {
+    fn finalize_processing(&mut self, _args: &Args, _viewer: &mut VideoSink) -> Result<()> {
         // Default implementation does nothing
         Ok(())
     }
