@@ -27,7 +27,7 @@ pub fn process_and_display_crop(
     headless: bool,
 ) -> Result<()> {
     let cropped_img = image::create_cropped_image(img, crop_result, img.height() as u32)?;
-    viewer.write_frame(&cropped_img, headless)?;
+    viewer.write_frame(cropped_img, headless)?;
     Ok(())
 }
 

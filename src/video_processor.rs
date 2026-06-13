@@ -4,6 +4,7 @@ use crate::crop;
 use crate::video_processor_utils;
 use crate::video_sink::{self, VideoSink};
 use anyhow::Result;
+use std::borrow::Cow;
 use usls::{
     Annotator, Config, DataLoader, HbbStyle, Model, ObbStyle,
     models::{DB, YOLO},
@@ -74,10 +75,12 @@ pub trait VideoProcessor {
             let detections = model.forward(&images)?;
 
             for (image, detection) in images.iter().zip(detections.iter()) {
-                let mut img = if !args.headless {
-                    annotator.annotate(image, detection)?
+                // Only the annotated (non-headless) path needs an owned image;
+                // headless borrows the DataLoader's frame to skip a full clone.
+                let mut img: Cow<usls::Image> = if !args.headless {
+                    Cow::Owned(annotator.annotate(image, detection)?)
                 } else {
-                    image.clone()
+                    Cow::Borrowed(image)
                 };
 
                 // Calculate crop areas based on the detection results
@@ -93,7 +96,7 @@ pub trait VideoProcessor {
 
                         if !ys[0].hbbs.is_empty() {
                             if !args.headless {
-                                img = textannotator.annotate(&img, &ys[0])?;
+                                img = Cow::Owned(textannotator.annotate(&img, &ys[0])?);
                             }
                             video_processor_utils::is_graphic_area_above_threshold(
                                 ys[0].hbbs.iter(),
@@ -149,6 +152,13 @@ pub trait VideoProcessor {
             }
         }
         self.finalize_processing(args, &mut viewer)?;
+
+        // Surface an empty/unreadable source here, rather than letting main.rs
+        // fail later on a missing output file with a confusing copy error.
+        if viewer.frame_count() == 0 {
+            anyhow::bail!("no frames were written from source {}", args.source);
+        }
+
         viewer.finalize()?;
 
         perf_chart();

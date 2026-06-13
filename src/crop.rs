@@ -280,13 +280,12 @@ pub fn calculate_three_heads_crop(
         let size_ratio = max_area / min_area;
         let similar_size = size_ratio <= 2.5;
 
-        // Check if heads are roughly equally spaced across the screen
-        let centers: Vec<f32> = heads.iter().map(|h| h.cx()).collect();
-        let sorted_centers = {
-            let mut centers = centers.clone();
-            centers.sort_by(|a, b| a.partial_cmp(b).unwrap());
-            centers
-        };
+        // Sort the head references left-to-right by horizontal center (NaN-safe),
+        // and reuse that ordering for both the spacing check and the
+        // left/middle/right identification below.
+        let mut sorted_heads = heads.to_vec();
+        sorted_heads.sort_by(|a, b| a.cx().total_cmp(&b.cx()));
+        let sorted_centers: Vec<f32> = sorted_heads.iter().map(|h| h.cx()).collect();
 
         let spacing1 = sorted_centers[1] - sorted_centers[0];
         let spacing2 = sorted_centers[2] - sorted_centers[1];
@@ -300,23 +299,10 @@ pub fn calculate_three_heads_crop(
             let single_width = stack_height * 0.9; // 9:10 aspect ratio
             let default_y = frame_height * 0.1; // 10% from top
 
-            // Identify heads corresponding to sorted centers
-            let left_center = sorted_centers[0];
-            let middle_center = sorted_centers[1];
-            let right_center = sorted_centers[2];
-
-            let left_head = *heads
-                .iter()
-                .find(|h| (h.cx() - left_center).abs() < 1.0)
-                .unwrap();
-            let middle_head = *heads
-                .iter()
-                .find(|h| (h.cx() - middle_center).abs() < 1.0)
-                .unwrap();
-            let right_head = *heads
-                .iter()
-                .find(|h| (h.cx() - right_center).abs() < 1.0)
-                .unwrap();
+            // Heads in left-to-right order (no fragile tolerance matching).
+            let left_head = sorted_heads[0];
+            let middle_head = sorted_heads[1];
+            let right_head = sorted_heads[2];
 
             let left_area = left_head.width() * left_head.height();
             let right_area = right_head.width() * right_head.height();
@@ -733,6 +719,39 @@ pub fn select_closest_crop<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_three_heads_nan_center_does_not_panic() {
+        // A degenerate head with a NaN center must not crash the sort/selection.
+        let frame_width = 1920.0;
+        let frame_height = 1080.0;
+        let h1 = Hbb::from_xywh(100.0, 400.0, 200.0, 200.0); // cx 200
+        let h2 = Hbb::from_xywh(1600.0, 400.0, 200.0, 200.0); // cx 1700 (wide bbox -> stack path)
+        let h3 = Hbb::from_xywh(f32::NAN, 400.0, 200.0, 200.0); // cx NaN
+        let heads = [&h1, &h2, &h3];
+        // Must return without panicking.
+        let _ = calculate_three_heads_crop(true, frame_width, frame_height, &heads);
+    }
+
+    #[test]
+    fn test_three_heads_selection_is_order_independent() {
+        // Three similar, equally-spaced, widely-separated heads -> stacked path.
+        let frame_width = 1920.0;
+        let frame_height = 1080.0;
+        let left = Hbb::from_xywh(300.0, 400.0, 200.0, 200.0); // cx 400
+        let middle = Hbb::from_xywh(860.0, 400.0, 200.0, 200.0); // cx 960
+        let right = Hbb::from_xywh(1420.0, 400.0, 200.0, 200.0); // cx 1520
+
+        let sorted =
+            calculate_three_heads_crop(true, frame_width, frame_height, &[&left, &middle, &right]);
+        let scrambled =
+            calculate_three_heads_crop(true, frame_width, frame_height, &[&right, &left, &middle]);
+
+        // Left/middle/right identification must not depend on input order.
+        assert_eq!(format!("{sorted:?}"), format!("{scrambled:?}"));
+        // And this configuration must take the stacked path.
+        assert!(matches!(sorted, CropResult::Stacked(_, _)));
+    }
 
     #[test]
     fn test_calculate_bounding_box() {
