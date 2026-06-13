@@ -18,6 +18,20 @@ mod video_processor;
 mod video_processor_utils;
 mod video_sink;
 
+/// Validates that `--source` refers to something we can read before doing any
+/// work, so a typo fails fast with a clear message instead of a cryptic ffmpeg
+/// or DataLoader error after the run directory has already been created.
+/// Network/stream sources (containing `://`) are assumed valid and not checked.
+fn validate_source(source: &str) -> Result<()> {
+    if source.contains("://") {
+        return Ok(());
+    }
+    if !Path::new(source).exists() {
+        anyhow::bail!("source video not found: {source}");
+    }
+    Ok(())
+}
+
 /// Creates a timestamped output directory and returns its path
 fn create_output_dir() -> Result<String> {
     let timestamp = Local::now().format("%Y%m%d_%H%M%S_%f").to_string();
@@ -29,6 +43,9 @@ fn create_output_dir() -> Result<String> {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args: cli::Args = argh::from_env();
+
+    // Fail fast on a missing source before creating run dirs or extracting audio.
+    validate_source(&args.source)?;
 
     // Create timestamped output directory
     let output_dir = create_output_dir()?;
@@ -139,4 +156,29 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_source_missing_path_errors() {
+        assert!(validate_source("/no/such/file/really.mp4").is_err());
+    }
+
+    #[test]
+    fn test_validate_source_existing_path_ok() {
+        let path = std::env::temp_dir().join("land2port_validate_source_test.tmp");
+        fs::write(&path, b"x").unwrap();
+        let result = validate_source(path.to_str().unwrap());
+        let _ = fs::remove_file(&path);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_source_url_is_skipped() {
+        assert!(validate_source("rtsp://example.com/stream").is_ok());
+        assert!(validate_source("http://example.com/video.mp4").is_ok());
+    }
 }
