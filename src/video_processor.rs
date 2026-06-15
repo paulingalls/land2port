@@ -1,6 +1,8 @@
 use crate::cli::Args;
 use crate::config;
 use crate::crop;
+use crate::frame_sink::FrameSink;
+use crate::metrics;
 use crate::video_processor_utils;
 use anyhow::Result;
 use usls::{
@@ -35,10 +37,17 @@ pub trait VideoProcessor {
             0
         };
 
-        let mut viewer = Viewer::default()
+        // The Viewer handles display/keys only; encoding is owned by the
+        // FrameSink's dedicated thread (so it overlaps crop/detect work).
+        let viewer = Viewer::default()
             .with_window_scale(0.5)
-            .with_fps(frame_rate)
-            .with_saveout(processed_video.to_string());
+            .with_fps(frame_rate);
+        let mut sink = FrameSink::new(
+            viewer,
+            processed_video.to_string(),
+            frame_rate as f32,
+            args.headless,
+        );
 
         // build annotator
         let annotator = Annotator::default()
@@ -60,19 +69,25 @@ pub trait VideoProcessor {
         );
 
         // Common video processing logic
-        for images in data_loader {
-            if viewer.is_window_exist() && !viewer.is_window_open() {
+        let mut frame_iter = data_loader.into_iter();
+        loop {
+            let Some(images) = metrics::time("decode", || frame_iter.next()) else {
+                break;
+            };
+            metrics::inc("frames_decoded", images.len() as u64);
+
+            if sink.is_window_exist() && !sink.is_window_open() {
                 break;
             }
 
             // Handle key events and delay
-            if let Some(key) = viewer.wait_key(1) {
+            if let Some(key) = sink.wait_key(1) {
                 if key == usls::Key::Escape {
                     break;
                 }
             }
 
-            let detections = model.forward(&images)?;
+            let detections = metrics::time("detect", || model.forward(&images))?;
 
             for (image, detection) in images.iter().zip(detections.iter()) {
                 let mut img = if !args.headless {
@@ -90,7 +105,7 @@ pub trait VideoProcessor {
 
                 let is_graphic =
                     if (objects.len() == 0 && args.keep_text) || args.prioritize_text {
-                        let ys = text_model.forward(&[image.clone()])?;
+                        let ys = metrics::time("ocr", || text_model.forward(&[image.clone()]))?;
 
                         if let Some(hbbs) = ys[0].hbbs() {
                             if !args.headless {
@@ -136,21 +151,22 @@ pub trait VideoProcessor {
                         &latest_crop,
                         &objects,
                         args,
-                        &mut viewer,
+                        &mut sink,
                         smooth_duration_frames,
                     )?;
                 } else {
                     video_processor_utils::process_and_display_crop(
                         &img,
                         &latest_crop,
-                        &mut viewer,
-                        args.headless,
+                        &mut sink,
                     )?;
                 }
             }
         }
-        self.finalize_processing(args, &mut viewer)?;
-        viewer.finalize_video()?;
+        self.finalize_processing(args, &mut sink)?;
+        // Drains the encoder thread's queue and finalizes the container
+        // (encode_finalize is timed inside the sink's thread).
+        sink.finish()?;
 
         perf(false);
 
@@ -164,12 +180,12 @@ pub trait VideoProcessor {
         latest_crop: &crop::CropResult,
         objects: &[&usls::Hbb],
         args: &Args,
-        viewer: &mut Viewer,
+        sink: &mut FrameSink,
         smooth_duration_frames: usize,
     ) -> Result<()>;
 
     /// Finalizes processing by handling any remaining frames in history (to be implemented by concrete processors)
-    fn finalize_processing(&mut self, _args: &Args, _viewer: &mut Viewer) -> Result<()> {
+    fn finalize_processing(&mut self, _args: &Args, _sink: &mut FrameSink) -> Result<()> {
         // Default implementation does nothing
         Ok(())
     }

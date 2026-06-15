@@ -1,8 +1,10 @@
 use crate::crop;
+use crate::frame_sink::FrameSink;
 use crate::image;
+use crate::metrics;
 use anyhow::Result;
 use std::env;
-use usls::{Hbb, Viewer, Y};
+use usls::{Hbb, Y};
 
 /// Helper function to check if debug logging is enabled
 pub fn is_debug_enabled() -> bool {
@@ -18,18 +20,17 @@ pub fn debug_println(args: std::fmt::Arguments) {
     }
 }
 
-/// Processes and displays a crop result
+/// Renders a crop result and hands the finished frame to the sink. Encoding
+/// (and the `frames_written` count) happens on the sink's encoder thread; this
+/// function only times the CPU-bound crop render that stays on the main thread.
 pub fn process_and_display_crop(
     img: &usls::Image,
     crop_result: &crop::CropResult,
-    viewer: &mut Viewer,
-    headless: bool,
+    sink: &mut FrameSink,
 ) -> Result<()> {
-    let cropped_img = image::create_cropped_image(img, crop_result, img.height() as u32)?;
-    if !headless {
-        viewer.imshow(&cropped_img)?;
-    }
-    viewer.write_video_frame(&cropped_img)?;
+    let cropped_img =
+        metrics::time("crop_render", || image::create_cropped_image(img, crop_result, img.height() as u32))?;
+    sink.write_frame(&cropped_img)?;
     Ok(())
 }
 

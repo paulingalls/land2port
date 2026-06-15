@@ -82,4 +82,10 @@ pub struct Args {
     /// output filepath: if set, move the final video to this location
     #[argh(option, default = "String::from(\"\")")]
     pub output_filepath: String,
+
+    /// local-stage: copy the source to local disk before processing and write
+    /// the output locally before copying to output-filepath, avoiding decode/
+    /// encode directly over a network mount (e.g. GCS FUSE on Cloud Run)
+    #[argh(switch)]
+    pub local_stage: bool,
 }

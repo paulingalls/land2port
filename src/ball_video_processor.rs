@@ -1,11 +1,12 @@
 use crate::cli::Args;
 use crate::crop;
+use crate::frame_sink::FrameSink;
 use crate::image::CutDetector;
 use crate::video_processor::VideoProcessor;
 use crate::video_processor_utils;
 use crate::video_processor_utils::predict_current_hbb;
 use anyhow::Result;
-use usls::{Hbb, Viewer};
+use usls::Hbb;
 
 /// Video processor that handles cropping with ball-specific logic
 pub struct BallVideoProcessor {
@@ -38,8 +39,8 @@ impl VideoProcessor for BallVideoProcessor {
         img: &usls::Image,
         latest_crop: &crop::CropResult,
         objects: &[&usls::Hbb],
-        args: &Args,
-        viewer: &mut Viewer,
+        _args: &Args,
+        sink: &mut FrameSink,
         _smooth_duration_frames: usize,
     ) -> Result<()> {
         let current_ball_count = objects.len();
@@ -164,7 +165,7 @@ impl VideoProcessor for BallVideoProcessor {
         self.previous_crop = Some(crop_result.clone());
 
         // Process and display the chosen crop
-        video_processor_utils::process_and_display_crop(img, &crop_result, viewer, args.headless)?;
+        video_processor_utils::process_and_display_crop(img, &crop_result, sink)?;
         Ok(())
     }
 

@@ -1,11 +1,11 @@
 use crate::cli::Args;
 use crate::crop;
+use crate::frame_sink::FrameSink;
 use crate::history;
 use crate::image::CutDetector;
 use crate::video_processor::VideoProcessor;
 use crate::video_processor_utils;
 use anyhow::Result;
-use usls::Viewer;
 
 /// Video processor that handles cropping with history smoothing
 pub struct HistorySmoothingVideoProcessor {
@@ -37,8 +37,7 @@ impl HistorySmoothingVideoProcessor {
         interpolation_length: usize,
         use_crop_selection: bool,
         smooth_duration_frames: usize,
-        viewer: &mut Viewer,
-        headless: bool,
+        sink: &mut FrameSink,
     ) -> Result<crop::CropResult> {
         // We know self.previous_crop is Some at this point since this method is only called
         // when we have a previous crop
@@ -80,8 +79,7 @@ impl HistorySmoothingVideoProcessor {
             video_processor_utils::process_and_display_crop(
                 &frame.image,
                 crop_result,
-                viewer,
-                headless,
+                sink,
             )?;
             frame_index += 1;
         }
@@ -98,7 +96,7 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
         latest_crop: &crop::CropResult,
         objects: &[&usls::Hbb],
         args: &Args,
-        viewer: &mut Viewer,
+        sink: &mut FrameSink,
         smooth_duration_frames: usize,
     ) -> Result<()> {
         let current_object_count = objects.len();
@@ -129,8 +127,7 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
                         self.history.len(),
                         true, // use crop selection logic
                         smooth_duration_frames,
-                        viewer,
-                        args.headless,
+                        sink,
                     )?;
                 }
                 object_count = current_object_count;
@@ -144,8 +141,7 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
                         video_processor_utils::process_and_display_crop(
                             &frame.image,
                             prev_crop,
-                            viewer,
-                            args.headless,
+                            sink,
                         )?;
                     }
                 }
@@ -197,8 +193,7 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
                                 self.history.len(),
                                 false, // don't use crop selection logic, just use change_crop
                                 smooth_duration_frames,
-                                viewer,
-                                args.headless,
+                                sink,
                             )?;
                             crop_result = Some(crop_to_use);
                         } else {
@@ -212,8 +207,7 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
                             self.history.len(),
                             true, // use crop selection logic
                             smooth_duration_frames,
-                            viewer,
-                            args.headless,
+                            sink,
                         )?;
                         crop_result = Some(crop_to_use);
                     }
@@ -232,8 +226,7 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
             video_processor_utils::process_and_display_crop(
                 img,
                 &crop_result,
-                viewer,
-                args.headless,
+                sink,
             )?;
         }
         Ok(())
@@ -263,7 +256,7 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
     }
 
     /// Finalizes processing by handling any remaining frames in history
-    fn finalize_processing(&mut self, args: &Args, viewer: &mut Viewer) -> Result<()> {
+    fn finalize_processing(&mut self, _args: &Args, sink: &mut FrameSink) -> Result<()> {
         // Process any remaining frames in the history
         if !self.history.is_empty() {
             video_processor_utils::debug_println(format_args!(
@@ -277,8 +270,7 @@ impl VideoProcessor for HistorySmoothingVideoProcessor {
                     video_processor_utils::process_and_display_crop(
                         &frame.image,
                         prev_crop,
-                        viewer,
-                        args.headless,
+                        sink,
                     )?;
                 }
             }

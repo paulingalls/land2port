@@ -9,6 +9,8 @@ argh = "0.1.13"
 usls = { git = "https://github.com/paulingalls/usls", features=["video", "coreml", "cuda", "tensorrt"] }
 image = "0.25"
 image-compare = "0.4.2"
+fast_image_resize = "5.1"
+video-rs = { git = 'https://github.com/oddity-ai/video-rs' }
 openai-api-rs = "6.0.6"
 tokio = { version = "1", features = ["full"] }
 chrono = "0.4.41"
