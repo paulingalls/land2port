@@ -192,9 +192,12 @@ pub fn create_cropped_image(
             // actual (post-clamp) aspect ratio.
             let scaled = if cropped.width() != target_width {
                 // Bind the target height before the move: `fir_resize` consumes
-                // `cropped`, so its dimensions must be read first.
-                let scaled_height =
-                    (target_width as f32 * (cropped.height() as f32 / cropped.width() as f32)) as u32;
+                // `cropped`, so its dimensions must be read first. Clamp to >=1
+                // so a degenerate wide-short crop can't request a 0-height resize.
+                let scaled_height = ((target_width as f32
+                    * (cropped.height() as f32 / cropped.width() as f32))
+                    as u32)
+                    .max(1);
                 fir_resize(cropped, target_width, scaled_height)?
             } else {
                 cropped
@@ -286,9 +289,12 @@ pub fn create_cropped_image(
             // actual (post-clamp) aspect ratio.
             let scaled = if cropped.width() != target_width {
                 // Bind the target height before the move: `fir_resize` consumes
-                // `cropped`, so its dimensions must be read first.
-                let scaled_height =
-                    (target_width as f32 * (cropped.height() as f32 / cropped.width() as f32)) as u32;
+                // `cropped`, so its dimensions must be read first. Clamp to >=1
+                // so a degenerate wide-short crop can't request a 0-height resize.
+                let scaled_height = ((target_width as f32
+                    * (cropped.height() as f32 / cropped.width() as f32))
+                    as u32)
+                    .max(1);
                 fir_resize(cropped, target_width, scaled_height)?
             } else {
                 cropped
