@@ -1,8 +1,19 @@
-use anyhow::Result;
+use crate::metrics;
+use anyhow::{Context, Result};
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::mpsc::{SyncSender, sync_channel};
+use std::thread::JoinHandle;
+use std::time::Instant;
 use usls::{Image, Key, Viewer};
-use video_rs::{encode::Settings, Encoder, Frame, Time};
+use video_rs::{Encoder, Frame, Time, encode::Settings};
+
+/// One encode request: the cropped frame's RGB24 bytes plus its dimensions.
+struct EncodeMsg {
+    w: usize,
+    h: usize,
+    data: Vec<u8>,
+}
 
 /// Sink for processed frames.
 ///
@@ -10,22 +21,72 @@ use video_rs::{encode::Settings, Encoder, Frame, Time};
 /// [`Encoder`] (for writing the cropped output to a deterministic path). The
 /// usls `Viewer` auto-generates output paths and exposes no save-path API, so
 /// we drive the encoder ourselves to keep writing to the path `main.rs` expects.
+///
+/// Encoding runs on a dedicated thread fed by a bounded FIFO channel, so the
+/// H.264 encode overlaps the crop-render and detection work on the main thread
+/// instead of running serially after each frame. Output is byte-identical to an
+/// inline encode: the channel is FIFO and single-consumer, so frames are encoded
+/// in exactly the order produced, with the same per-frame timestamps.
+///
+/// The `video-rs` `Encoder` wraps non-`Send` ffmpeg state, so it is constructed
+/// and owned entirely inside the encoder thread — only plain frame bytes (which
+/// are `Send`) cross the channel.
 pub struct VideoSink {
     viewer: Viewer<'static>,
-    encoder: Option<Encoder>,
-    saveout: PathBuf,
-    fps: f64,
+    tx: Option<SyncSender<EncodeMsg>>,
+    handle: Option<JoinHandle<Result<()>>>,
     frame_index: usize,
 }
 
 impl VideoSink {
     /// Creates a sink that encodes to `saveout` at the given frames-per-second.
     pub fn new(saveout: impl Into<PathBuf>, fps: f64) -> Self {
+        let saveout = saveout.into();
+        // Bounded so a slow encoder applies backpressure rather than letting
+        // in-flight frames (each ~6 MB at 1080x1920) grow unbounded in RAM.
+        let (tx, rx) = sync_channel::<EncodeMsg>(8);
+
+        let handle = std::thread::spawn(move || -> Result<()> {
+            let mut encoder: Option<Encoder> = None;
+            let mut frame_index: usize = 0;
+
+            while let Ok(msg) = rx.recv() {
+                let start = Instant::now();
+                if encoder.is_none() {
+                    // The encoder is created lazily from the first frame's
+                    // dimensions, mirroring how the usls `Viewer` initializes
+                    // encoding.
+                    let settings = Settings::preset_h264_yuv420p(msg.w, msg.h, false);
+                    encoder = Some(
+                        Encoder::new(saveout.clone(), settings).context("creating video encoder")?,
+                    );
+                }
+                let enc = encoder.as_mut().expect("encoder initialized above");
+                let frame = Frame::from_shape_vec((msg.h, msg.w, 3), msg.data)
+                    .context("building encoder frame")?;
+                // Output frame timing is derived from a monotonic frame counter
+                // at the source fps, matching the old `Viewer::with_fps`.
+                let timestamp = Time::from_secs_f64(frame_index as f64 / fps);
+                enc.encode(&frame, timestamp).context("encoding video frame")?;
+                frame_index += 1;
+                metrics::record("encode_write", start.elapsed());
+                metrics::inc("frames_written", 1);
+            }
+
+            // Sender dropped → no more frames; finalize the container (the mp4
+            // moov-atom write/seek happens here).
+            if let Some(mut enc) = encoder.take() {
+                let start = Instant::now();
+                enc.finish().context("finalizing video encoder")?;
+                metrics::record("encode_finalize", start.elapsed());
+            }
+            Ok(())
+        });
+
         Self {
             viewer: Viewer::default().with_window_scale(0.5),
-            encoder: None,
-            saveout: saveout.into(),
-            fps,
+            tx: Some(tx),
+            handle: Some(handle),
             frame_index: 0,
         }
     }
@@ -40,13 +101,15 @@ impl VideoSink {
         self.viewer.is_window_exist_and_closed()
     }
 
-    /// Displays (unless headless) and encodes one output frame, consuming it.
+    /// Displays (unless headless) and enqueues one output frame for encoding,
+    /// consuming it.
     ///
     /// Takes the cropped image by value so the pixel buffer can be moved into the
-    /// encoder (`into_rgb8`) rather than cloned. The encoder is created lazily
-    /// from the first frame's dimensions, mirroring how the usls `Viewer` itself
-    /// initializes encoding. Output frame timing is derived from a monotonic
-    /// frame counter at the source fps, matching the old `Viewer::with_fps`.
+    /// encode message (`into_rgb8`) rather than cloned. `imshow` stays on the
+    /// calling (main) thread — required on macOS, where window operations must
+    /// not run on a background thread — while only the plain RGB bytes cross to
+    /// the encoder thread. Blocks if the encoder is more than the channel bound
+    /// behind.
     pub fn write_frame(&mut self, img: Image, headless: bool) -> Result<()> {
         if !headless {
             self.viewer.imshow(&img)?;
@@ -54,29 +117,31 @@ impl VideoSink {
 
         let rgb = img.into_rgb8();
         let (w, h) = (rgb.width() as usize, rgb.height() as usize);
+        let data = rgb.into_raw();
 
-        if self.encoder.is_none() {
-            let settings = Settings::preset_h264_yuv420p(w, h, false);
-            self.encoder = Some(Encoder::new(self.saveout.clone(), settings)?);
-        }
-        let encoder = self.encoder.as_mut().expect("encoder initialized above");
-
-        let frame = Frame::from_shape_vec((h, w, 3), rgb.into_raw())?;
-        let timestamp = Time::from_secs_f64(self.frame_index as f64 / self.fps);
-        encoder.encode(&frame, timestamp)?;
+        self.tx
+            .as_ref()
+            .expect("write_frame after finalize")
+            .send(EncodeMsg { w, h, data })
+            .map_err(|_| anyhow::anyhow!("encoder thread terminated early"))?;
         self.frame_index += 1;
         Ok(())
     }
 
-    /// Number of frames encoded so far.
+    /// Number of frames enqueued for encoding so far.
     pub fn frame_count(&self) -> usize {
         self.frame_index
     }
 
-    /// Flushes and closes the encoder, finalizing the output file.
+    /// Flushes and finalizes: drops the sender so the encoder thread drains its
+    /// queue and writes the container trailer, then joins and propagates any
+    /// encode error.
     pub fn finalize(&mut self) -> Result<()> {
-        if let Some(mut encoder) = self.encoder.take() {
-            encoder.finish()?;
+        self.tx.take();
+        if let Some(handle) = self.handle.take() {
+            handle
+                .join()
+                .map_err(|_| anyhow::anyhow!("encoder thread panicked"))??;
         }
         Ok(())
     }
@@ -87,11 +152,16 @@ impl Drop for VideoSink {
         // Ensure the mp4 is finalized (moov atom written, packets flushed) even
         // if the processing loop exits early via an error or panic before the
         // explicit finalize() runs. A successful finalize() already took the
-        // encoder, so this is a no-op on the happy path. Errors can't propagate
-        // out of drop, so they are logged.
-        if let Some(mut encoder) = self.encoder.take() {
-            if let Err(err) = encoder.finish() {
-                eprintln!("warning: failed to finalize video output on drop: {err}");
+        // sender and handle, so this is a no-op on the happy path. Errors can't
+        // propagate out of drop, so they are logged.
+        self.tx.take();
+        if let Some(handle) = self.handle.take() {
+            match handle.join() {
+                Ok(Err(err)) => {
+                    eprintln!("warning: failed to finalize video output on drop: {err}")
+                }
+                Err(_) => eprintln!("warning: encoder thread panicked during drop"),
+                Ok(Ok(())) => {}
             }
         }
     }
