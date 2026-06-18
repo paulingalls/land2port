@@ -1,5 +1,6 @@
 use crate::crop;
 use crate::image;
+use crate::metrics;
 use crate::video_sink::VideoSink;
 use anyhow::Result;
 use std::env;
@@ -19,14 +20,18 @@ pub fn debug_println(args: std::fmt::Arguments) {
     }
 }
 
-/// Processes and displays a crop result
+/// Renders a crop result and hands the finished frame to the sink. The H.264
+/// encode (and the `frames_written` count) happens on the sink's encoder
+/// thread; this function only times the CPU-bound crop render on the main thread.
 pub fn process_and_display_crop(
     img: &usls::Image,
     crop_result: &crop::CropResult,
     viewer: &mut VideoSink,
     headless: bool,
 ) -> Result<()> {
-    let cropped_img = image::create_cropped_image(img, crop_result, img.height() as u32)?;
+    let cropped_img = metrics::time("crop_render", || {
+        image::create_cropped_image(img, crop_result, img.height() as u32)
+    })?;
     viewer.write_frame(cropped_img, headless)?;
     Ok(())
 }

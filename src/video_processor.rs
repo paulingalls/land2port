@@ -1,6 +1,7 @@
 use crate::cli::Args;
 use crate::config;
 use crate::crop;
+use crate::metrics;
 use crate::video_processor_utils;
 use crate::video_sink::{self, VideoSink};
 use anyhow::Result;
@@ -59,8 +60,16 @@ pub trait VideoProcessor {
                 .show_name(false),
         );
 
-        // Common video processing logic
-        for images in &data_loader {
+        // Common video processing logic. Drive the iterator explicitly (rather
+        // than `for images in &data_loader`) so the decode/demux time of each
+        // batch can be measured separately from detection and crop work.
+        let mut frame_iter = (&data_loader).into_iter();
+        loop {
+            let Some(images) = metrics::time("decode", || frame_iter.next()) else {
+                break;
+            };
+            metrics::inc("frames_decoded", images.len() as u64);
+
             if viewer.is_window_exist_and_closed() {
                 break;
             }
@@ -72,7 +81,7 @@ pub trait VideoProcessor {
                 }
             }
 
-            let detections = model.forward(&images)?;
+            let detections = metrics::time("detect", || model.forward(&images))?;
 
             for (image, detection) in images.iter().zip(detections.iter()) {
                 // Only the annotated (non-headless) path needs an owned image;
@@ -92,7 +101,7 @@ pub trait VideoProcessor {
 
                 let is_graphic =
                     if (objects.len() == 0 && args.keep_text) || args.prioritize_text {
-                        let ys = text_model.forward(&[image.clone()])?;
+                        let ys = metrics::time("ocr", || text_model.forward(&[image.clone()]))?;
 
                         if !ys[0].hbbs.is_empty() {
                             if !args.headless {

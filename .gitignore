@@ -4,3 +4,5 @@
 /video/
 /runs/*.mov
 .DS_Store
+/bench/results/
+/bench/.cuda-venv/

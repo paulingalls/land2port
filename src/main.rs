@@ -12,6 +12,7 @@ mod crop;
 mod history;
 mod history_smoothing_video_processor;
 mod image;
+mod metrics;
 mod simple_smoothing_video_processor;
 mod transcript;
 mod video_processor;
@@ -42,6 +43,7 @@ fn create_output_dir() -> Result<String> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    metrics::init();
     let args: cli::Args = argh::from_env();
 
     // Fail fast on a missing source before creating run dirs or extracting audio.
@@ -87,17 +89,20 @@ async fn main() -> Result<()> {
     };
 
     // Choose processor based on object type and smoothing preference
-    if args.object == "ball" {
-        let mut processor = ball_video_processor::BallVideoProcessor::new(&args);
-        processor.process_video(&args, &processed_video)?;
-    } else if args.use_simple_smoothing {
-        let mut processor = simple_smoothing_video_processor::SimpleSmoothingVideoProcessor::new();
-        processor.process_video(&args, &processed_video)?;
-    } else {
-        let mut processor =
-            history_smoothing_video_processor::HistorySmoothingVideoProcessor::new(&args);
-        processor.process_video(&args, &processed_video)?;
-    }
+    metrics::time("process_video", || -> Result<()> {
+        if args.object == "ball" {
+            let mut processor = ball_video_processor::BallVideoProcessor::new(&args);
+            processor.process_video(&args, &processed_video)
+        } else if args.use_simple_smoothing {
+            let mut processor =
+                simple_smoothing_video_processor::SimpleSmoothingVideoProcessor::new();
+            processor.process_video(&args, &processed_video)
+        } else {
+            let mut processor =
+                history_smoothing_video_processor::HistorySmoothingVideoProcessor::new(&args);
+            processor.process_video(&args, &processed_video)
+        }
+    })?;
 
     if args.add_captions {
         let captioned_video = format!("{}/captioned_video.mp4", output_dir);
@@ -154,6 +159,18 @@ async fn main() -> Result<()> {
             );
         }
     }
+
+    // Write the performance report next to the run artifacts, and (when an
+    // output filepath is set) next to the delivered video so benchmark tooling
+    // can fetch it.
+    let run_metrics = format!("{}/metrics.json", output_dir);
+    let mut metrics_paths: Vec<&str> = vec![&run_metrics];
+    let delivered_metrics;
+    if !args.output_filepath.is_empty() {
+        delivered_metrics = format!("{}.metrics.json", args.output_filepath);
+        metrics_paths.push(&delivered_metrics);
+    }
+    metrics::write_report(&metrics_paths)?;
 
     Ok(())
 }
