@@ -10,4 +10,10 @@ if [ -d /data ]; then
     ln -sf /data/cache/tensorrt /root/.cache/usls/caches/tensorrt
 fi
 
-exec ./land2port "$@"
+./land2port "$@"
+EXIT_CODE=$?
+
+# Flush all pending FUSE writes to GCS before the container exits
+sync
+
+exit $EXIT_CODE
