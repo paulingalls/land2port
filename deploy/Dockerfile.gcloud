@@ -2,7 +2,11 @@
 FROM --platform=linux/amd64 nvcr.io/nvidia/tensorrt:24.12-py3 AS tensorrt
 
 # Stage 1: Builder
-FROM --platform=linux/amd64 nvidia/cuda:12.2.2-cudnn8-devel-ubuntu22.04 AS builder
+# Ubuntu 24.04 base (glibc 2.39): the prebuilt ONNX Runtime pulled by
+# ort 2.0.0-rc.12 references glibc >=2.38 symbols (__isoc23_strtoll etc.), so
+# the old ubuntu22.04 (glibc 2.35) base failed to link. CUDA 12.6 matches the
+# TensorRT 24.12 libs copied below.
+FROM --platform=linux/amd64 nvidia/cuda:12.6.3-cudnn-devel-ubuntu24.04 AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -41,7 +45,9 @@ COPY src/ src/
 RUN cargo build --release
 
 # Stage 2: Runtime
-FROM --platform=linux/amd64 nvidia/cuda:12.2.2-cudnn8-runtime-ubuntu22.04
+# Must match the builder's glibc (>=2.38) or the binary won't run; ubuntu24.04
+# = glibc 2.39. The -cudnn- tag already includes cuDNN 9.
+FROM --platform=linux/amd64 nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
