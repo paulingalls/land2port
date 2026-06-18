@@ -1486,6 +1486,7 @@ dependencies = [
  "anyhow",
  "argh",
  "chrono",
+ "fast_image_resize",
  "image",
  "image-compare",
  "ndarray 0.16.1",

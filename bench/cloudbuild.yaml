@@ -1,0 +1,29 @@
+# Builds the land2port image (with the metrics instrumentation + opt1-5)
+# remotely, since no local Docker is available. Tagged ':opt' so it never
+# overwrites the existing ':latest' used by the production land2port job.
+#
+#   gcloud builds submit --config bench/cloudbuild.yaml \
+#     --substitutions=_REGION=<GCP_REGION>,_REPO=<ARTIFACT_REPO> .
+#
+# _REGION / _REPO default to us-central1 / docker-repo; override them to match
+# your Artifact Registry. Uses a high-CPU machine (the Rust + usls/cuda/tensorrt
+# compile is heavy) and a generous timeout/disk for the multi-GB CUDA layers.
+substitutions:
+  _REGION: us-central1
+  _REPO: docker-repo
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --platform=linux/amd64
+      - -f
+      - deploy/Dockerfile.gcloud
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/land2port:opt
+      - .
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/land2port:opt
+options:
+  machineType: E2_HIGHCPU_32
+  diskSizeGb: 200
+timeout: 3600s
