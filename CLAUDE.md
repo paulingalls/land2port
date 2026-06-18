@@ -44,7 +44,7 @@ Landscape-to-portrait (9:16) video converter: YOLO object detection → crop cal
 
 `deploy/` runs the converter as a Cloud Run Job on an NVIDIA L4 GPU with the TensorRT execution provider (`--device trt:0`).
 
-- **`Dockerfile.gcloud`** — 3-stage `linux/amd64` build: pulls TensorRT 10 libs from the NGC container, builds the binary on `cuda:12.2.2-cudnn8-devel`, ships on the `runtime` image. The builder stage `sed`s out the macOS-only `coreml` feature from `Cargo.toml`. Copies ONNX Runtime provider `.so`s, TensorRT libs, and `model/` into the image.
+- **`Dockerfile.gcloud`** — 3-stage `linux/amd64` build: pulls TensorRT 10 libs from the NGC container, builds the binary on `cuda:12.6.3-cudnn-devel-ubuntu24.04`, ships on the matching `runtime` image. The Ubuntu 24.04 base (glibc 2.39) is required — `ort`'s prebuilt ONNX Runtime references glibc ≥2.38 symbols (`__isoc23_*`), so the older ubuntu22.04/glibc 2.35 base failed to link. No `Cargo.toml` patching is needed: device features are platform-gated (see Build Notes), so the Linux build picks up `cuda`+`tensorrt` and never pulls `coreml`. Copies ONNX Runtime provider `.so`s, TensorRT libs, and `model/` into the image.
 - **`entrypoint.sh`** — symlinks `/root/.cache/usls/caches/tensorrt` → `/data/cache/tensorrt` (GCS FUSE) so the (slow-to-build) TensorRT engine cache persists across executions. Only this cache is symlinked — model downloads stay on local disk to avoid cross-device rename errors.
 - I/O is via a GCS bucket (`<project-id>-land2port`) mounted at `/data`, with `input/` and `output/` folders. Jobs read `/data/input/X.mp4` and write `--output-filepath /data/output/X.mp4`.
 
