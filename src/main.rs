@@ -1,8 +1,10 @@
 use crate::video_processor::VideoProcessor;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::Local;
+use std::env;
 use std::fs;
-use std::path::Path;
+use std::io;
+use std::path::{Path, PathBuf};
 
 mod audio;
 mod ball_video_processor;
@@ -33,27 +35,138 @@ fn validate_source(source: &str) -> Result<()> {
     Ok(())
 }
 
-/// Creates a timestamped output directory and returns its path
+/// Creates a timestamped output directory and returns its absolute path.
+/// Uses LAND2PORT_RUNS_DIR if set (e.g. /app/runs in the container), else cwd/runs.
 fn create_output_dir() -> Result<String> {
     let timestamp = Local::now().format("%Y%m%d_%H%M%S_%f").to_string();
-    let output_dir = format!("./runs/{}", timestamp);
-    fs::create_dir_all(&output_dir)?;
-    Ok(output_dir)
+    let base: PathBuf = match env::var("LAND2PORT_RUNS_DIR") {
+        Ok(d) => PathBuf::from(d),
+        Err(_) => env::current_dir()
+            .context("Getting current working directory")?
+            .join("runs"),
+    };
+    let output_dir = base.join(timestamp.as_str());
+    let output_dir_str = output_dir.to_string_lossy().into_owned();
+    fs::create_dir_all(&output_dir)
+        .with_context(|| format!("Creating output directory {}", output_dir.display()))?;
+    Ok(output_dir_str)
+}
+
+/// Explicitly fsync a file so that GCS FUSE (or any other FUSE filesystem)
+/// flushes its write-back cache to the remote store before the process exits.
+fn sync_output_file(path: &str) -> Result<()> {
+    // Open with write access: Windows FlushFileBuffers (sync_all) is denied on a
+    // read-only handle. Does not truncate the file.
+    let f = fs::OpenOptions::new()
+        .write(true)
+        .open(path)
+        .with_context(|| format!("Opening output file for fsync: {}", path))?;
+    f.sync_all()
+        .with_context(|| format!("Fsyncing output file: {}", path))?;
+    println!("Output file synced: {}", path);
+    Ok(())
+}
+
+/// Copy a file to a destination path, creating parent dirs. Uses io::copy for
+/// compatibility with FUSE (e.g. GCS) where fs::copy can fail. Source should be
+/// an absolute path so it resolves regardless of cwd.
+fn copy_to_output(source: &str, dest: &str) -> Result<()> {
+    let source_path = Path::new(source);
+    let dest_path = Path::new(dest);
+
+    if !source_path.exists() {
+        let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        anyhow::bail!(
+            "Source file does not exist: {}\n  Current working directory: {}\n  (Use absolute paths for output so cwd changes do not break the copy.)",
+            source_path.display(),
+            cwd.display()
+        );
+    }
+    let meta = fs::metadata(source_path).with_context(|| format!("Stat source file {}", source))?;
+    println!(
+        "Copying source {} ({}) to {}",
+        source_path.display(),
+        human_size(meta.len()),
+        dest
+    );
+
+    if let Some(parent) = dest_path.parent() {
+        fs::create_dir_all(parent)
+            .with_context(|| format!("Creating destination directory {}", parent.display()))?;
+    }
+    let mut src_file =
+        fs::File::open(source_path).with_context(|| format!("Opening source file {}", source))?;
+    let mut dest_file = fs::File::create(dest_path)
+        .with_context(|| format!("Creating destination file {}", dest))?;
+    io::copy(&mut src_file, &mut dest_file)
+        .with_context(|| format!("Copying {} to {}", source, dest))?;
+    dest_file
+        .sync_all()
+        .with_context(|| format!("Fsyncing destination file {}", dest))?;
+    Ok(())
+}
+
+fn human_size(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+    if bytes >= GB {
+        format!("{:.1} GiB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.1} MiB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.1} KiB", bytes as f64 / KB as f64)
+    } else {
+        format!("{} B", bytes)
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     metrics::init();
-    let args: cli::Args = argh::from_env();
+    let mut args: cli::Args = argh::from_env();
 
     // Fail fast on a missing source before creating run dirs or extracting audio.
     validate_source(&args.source)?;
 
-    // Create timestamped output directory
+    let cwd = env::current_dir().context("Getting current working directory")?;
+    println!("Working directory: {}", cwd.display());
+
+    // Create timestamped output directory (absolute path)
     let output_dir = create_output_dir()?;
     println!("Created output directory: {}", output_dir);
 
-    let processed_video = format!("{}/processed_video.mp4", output_dir);
+    // Local-staging: copy the source onto local disk (the output_dir lives on the
+    // container's local fs) so decode reads from local storage instead of a
+    // network mount. Output is likewise written locally and copied back at the
+    // end (handled by the non-direct-write path below).
+    if args.local_stage && !args.source.is_empty() {
+        let ext = Path::new(&args.source)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("mp4");
+        let staged_source = format!("{}/staged_input.{}", output_dir, ext);
+        metrics::time("stage_in", || copy_to_output(&args.source, &staged_source))?;
+        println!("Staged source locally: {}", staged_source);
+        args.source = staged_source;
+    }
+
+    // When output_filepath is set and we're not adding captions, write directly
+    // there so we avoid the copy step and any temp-file behavior in the video
+    // library (usls) that can leave the file missing at the expected temp path
+    // (e.g. on GCS FUSE). With --local-stage we deliberately skip this direct
+    // write so the encode goes to local disk first.
+    let processed_video =
+        if !args.add_captions && !args.output_filepath.is_empty() && !args.local_stage {
+            if let Some(parent) = Path::new(&args.output_filepath).parent() {
+                fs::create_dir_all(parent)
+                    .with_context(|| format!("Creating output directory {}", parent.display()))?;
+            }
+            println!("Writing processed video directly to: {}", args.output_filepath);
+            args.output_filepath.clone()
+        } else {
+            format!("{}/processed_video.mp4", output_dir)
+        };
 
     // If adding captions, prepare audio/transcription artifacts first
     let (extracted_audio, srt_path) = if args.add_captions {
@@ -65,22 +178,28 @@ async fn main() -> Result<()> {
         let srt_path = format!("{}/transcript.srt", output_dir);
 
         // Extract audio from the source video
-        audio::extract_audio(&args.source, &extracted_audio)?;
+        metrics::time("audio_extract", || {
+            audio::extract_audio(&args.source, &extracted_audio)
+        })?;
         println!("Audio extracted successfully to: {}", extracted_audio);
 
         // Compress the extracted audio to MP3
-        audio::compress_to_mp3(&extracted_audio, &compressed_audio)?;
+        metrics::time("audio_compress", || {
+            audio::compress_to_mp3(&extracted_audio, &compressed_audio)
+        })?;
         println!("Audio compressed to MP3: {}", compressed_audio);
 
         // Transcribe audio
         println!("Transcribing audio to: {}", srt_path);
         let transcript_config = transcript::TranscriptConfig::default();
+        let transcribe_start = std::time::Instant::now();
         transcript::transcribe_audio(
             Path::new(&compressed_audio),
             Path::new(&srt_path),
             &transcript_config,
         )
         .await?;
+        metrics::record("transcribe", transcribe_start.elapsed());
         println!("Transcription completed successfully");
 
         (Some(extracted_audio), Some(srt_path))
@@ -111,21 +230,25 @@ async fn main() -> Result<()> {
         // Burn captions into the video
         println!("Burning captions into video...");
         let caption_style = audio::CaptionStyle::default();
-        audio::burn_captions(
-            &processed_video,
-            &srt_path.as_ref().unwrap(),
-            &captioned_video,
-            Some(caption_style),
-        )?;
+        metrics::time("burn_captions", || {
+            audio::burn_captions(
+                &processed_video,
+                &srt_path.as_ref().unwrap(),
+                &captioned_video,
+                Some(caption_style),
+            )
+        })?;
         println!("Captions burned successfully");
 
         // Add audio to the final video
         println!("Adding audio to video...");
-        audio::combine_video_audio(
-            &captioned_video,
-            &extracted_audio.as_ref().unwrap(),
-            &final_video,
-        )?;
+        metrics::time("combine_av", || {
+            audio::combine_video_audio(
+                &captioned_video,
+                &extracted_audio.as_ref().unwrap(),
+                &final_video,
+            )
+        })?;
         println!(
             "Audio added successfully. Final video saved to: {}",
             final_video
@@ -133,31 +256,42 @@ async fn main() -> Result<()> {
 
         // Copy final video to output_filepath if specified
         if !args.output_filepath.is_empty() {
-            if let Some(parent) = Path::new(&args.output_filepath).parent() {
-                fs::create_dir_all(parent)?;
-            }
-            println!("Copying final video to: {}", args.output_filepath);
-            fs::copy(&final_video, &args.output_filepath)?;
+            metrics::time("stage_out", || {
+                copy_to_output(&final_video, &args.output_filepath)
+            })?;
             println!(
                 "Final video copied successfully to: {}",
                 args.output_filepath
             );
         }
+        // Ensure the output is flushed to GCS before exiting
+        let final_path = if !args.output_filepath.is_empty() {
+            &args.output_filepath
+        } else {
+            &final_video
+        };
+        sync_output_file(final_path)?;
     } else {
         println!("Processed video saved to: {}", processed_video);
 
-        // Copy processed video to output_filepath if specified
-        if !args.output_filepath.is_empty() {
-            if let Some(parent) = Path::new(&args.output_filepath).parent() {
-                fs::create_dir_all(parent)?;
-            }
-            println!("Copying processed video to: {}", args.output_filepath);
-            fs::copy(&processed_video, &args.output_filepath)?;
+        // Copy only when we wrote to a temp path and a destination is set; the
+        // direct-write path above already wrote straight to output_filepath.
+        if !args.output_filepath.is_empty() && processed_video != args.output_filepath {
+            metrics::time("stage_out", || {
+                copy_to_output(&processed_video, &args.output_filepath)
+            })?;
             println!(
                 "Processed video copied successfully to: {}",
                 args.output_filepath
             );
         }
+        // Ensure the output is flushed to GCS before exiting
+        let final_path = if !args.output_filepath.is_empty() {
+            &args.output_filepath
+        } else {
+            &processed_video
+        };
+        sync_output_file(final_path)?;
     }
 
     // Write the performance report next to the run artifacts, and (when an

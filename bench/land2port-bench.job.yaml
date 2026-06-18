@@ -1,0 +1,51 @@
+# Cloud Run Job spec template for the land2port benchmark job.
+# Replace the <PLACEHOLDERS> below with your environment's values, then:
+#   gcloud run jobs replace bench/land2port-bench.job.yaml --region=<GCP_REGION>
+#
+# Placeholders:
+#   <GCP_REGION>            e.g. us-central1            (run + registry region)
+#   <GCP_PROJECT_ID>        your GCP project ID
+#   <GCP_PROJECT_NUMBER>    your GCP project number     (namespace)
+#   <ARTIFACT_REPO>         Artifact Registry repo name holding the image
+#   <SERVICE_ACCOUNT_EMAIL> runtime service account for the job
+#   <GCS_BUCKET_NAME>       existing GCS bucket mounted at /data
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  annotations:
+    run.googleapis.com/threat-detection: 'true'
+  labels:
+    cloud.googleapis.com/location: <GCP_REGION>
+  name: land2port-bench
+  namespace: '<GCP_PROJECT_NUMBER>'
+spec:
+  template:
+    metadata:
+      annotations:
+        run.googleapis.com/execution-environment: gen2
+        run.googleapis.com/gpu-zonal-redundancy-disabled: 'true'
+    spec:
+      taskCount: 1
+      template:
+        spec:
+          containers:
+          - image: <GCP_REGION>-docker.pkg.dev/<GCP_PROJECT_ID>/<ARTIFACT_REPO>/land2port:opt
+            resources:
+              limits:
+                cpu: '4'
+                memory: 16Gi
+                nvidia.com/gpu: '1'
+            volumeMounts:
+            - mountPath: /data
+              name: data
+          maxRetries: 0
+          nodeSelector:
+            run.googleapis.com/accelerator: nvidia-l4
+          serviceAccountName: <SERVICE_ACCOUNT_EMAIL>
+          timeoutSeconds: '3600'
+          volumes:
+          - csi:
+              driver: gcsfuse.run.googleapis.com
+              volumeAttributes:
+                bucketName: <GCS_BUCKET_NAME>
+            name: data
