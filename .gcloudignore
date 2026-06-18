@@ -1,0 +1,9 @@
+# Keep the Cloud Build upload context small. The image only needs the source,
+# Cargo manifests, build.rs, the model/ ONNX files, and deploy/.
+.git/
+target/
+runs/
+video/
+bench/results/
+bench/.cuda-venv/
+*.7z

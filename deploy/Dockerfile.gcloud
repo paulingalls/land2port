@@ -68,12 +68,14 @@ COPY --from=tensorrt /usr/lib/x86_64-linux-gnu/libnvonnxparser.so.10 /usr/lib/
 COPY --from=tensorrt /usr/lib/x86_64-linux-gnu/libnvinfer_builder_resource.so.10.7.0 /usr/lib/
 
 ENV LD_LIBRARY_PATH="/usr/lib:${LD_LIBRARY_PATH}"
+# Fixed temp dir for runs (avoids cwd-dependent paths in Cloud Run)
+ENV LAND2PORT_RUNS_DIR=/app/runs
 
 # Copy ONNX model files
 COPY model/ ./model/
 
 COPY deploy/entrypoint.sh ./entrypoint.sh
-RUN chmod +x entrypoint.sh
+RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh
 
 ENTRYPOINT ["./entrypoint.sh"]
 CMD ["--headless", "--device", "trt:0"]
