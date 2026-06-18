@@ -119,11 +119,24 @@ impl VideoSink {
         let (w, h) = (rgb.width() as usize, rgb.height() as usize);
         let data = rgb.into_raw();
 
-        self.tx
+        let sent = self
+            .tx
             .as_ref()
             .expect("write_frame after finalize")
-            .send(EncodeMsg { w, h, data })
-            .map_err(|_| anyhow::anyhow!("encoder thread terminated early"))?;
+            .send(EncodeMsg { w, h, data });
+        if sent.is_err() {
+            // The receiver was dropped, i.e. the encoder thread exited (almost
+            // always with an error). Join it to surface the real cause rather
+            // than a generic "terminated early" message.
+            if let Some(handle) = self.handle.take() {
+                match handle.join() {
+                    Ok(Err(e)) => return Err(e.context("encoder thread failed")),
+                    Err(_) => return Err(anyhow::anyhow!("encoder thread panicked")),
+                    Ok(Ok(())) => {}
+                }
+            }
+            return Err(anyhow::anyhow!("encoder thread terminated early"));
+        }
         self.frame_index += 1;
         Ok(())
     }
