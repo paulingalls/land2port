@@ -164,6 +164,58 @@ pub fn extract_objects_above_threshold<'a>(
         .collect()
 }
 
+/// Drops detections that are small *relative to the largest* detection in the
+/// frame, to discriminate the intended subject(s) from incidental faces.
+///
+/// A dominant subject plus much-smaller faces — faces printed on a book cover or
+/// poster, a photo on the wall, or a distant bystander — would otherwise inflate
+/// the object count and push `calculate_crop` into a stacked/multi-head layout
+/// that splits the real subject across the top and bottom of the 9:16 frame.
+///
+/// An object is kept when its area is at least `min_area_ratio` of the largest
+/// object's area; the largest object is always kept. The ratio is on *area*, so
+/// e.g. the `0.05` default keeps anything down to ~1/5 the dominant object's
+/// linear size — a genuine co-subject at similar distance (~0.9 ratio) is always
+/// kept, while a face on a book cover (a few percent) is dropped with margin.
+///
+/// This is scale-free (relative to the scene's own largest object), so it
+/// generalizes across resolutions and shot framings without a per-video tweak.
+///
+/// `min_area_ratio <= 0` disables the filter. Ball-type objects (`ball`,
+/// `sports ball`) are exempt: a valid ball can be legitimately small relative to
+/// a nearer one, and the dedicated ball path selects a single ball itself.
+/// Inputs with fewer than two objects are returned as-is.
+pub fn filter_small_relative_objects<'a>(
+    objects: Vec<&'a Hbb>,
+    object_name: &str,
+    min_area_ratio: f32,
+) -> Vec<&'a Hbb> {
+    let is_ball_type = object_name == "ball" || object_name == "sports ball";
+    if min_area_ratio <= 0.0 || is_ball_type || objects.len() < 2 {
+        return objects;
+    }
+
+    // Use Hbb::area() to match the largest-object selection in crop.rs.
+    let largest_area = objects.iter().map(|hbb| hbb.area()).fold(0.0_f32, f32::max);
+    if largest_area <= 0.0 {
+        return objects;
+    }
+
+    let area_threshold = largest_area * min_area_ratio;
+    let kept: Vec<&Hbb> = objects
+        .into_iter()
+        .filter(|hbb| hbb.area() >= area_threshold)
+        .collect();
+
+    debug_println(format_args!(
+        "filter_small_relative_objects: kept {} (largest_area: {:.0}, threshold: {:.0})",
+        kept.len(),
+        largest_area,
+        area_threshold
+    ));
+    kept
+}
+
 /// Interpolates between two CropResults over a specified number of frames
 ///
 /// # Arguments
@@ -219,32 +271,6 @@ pub fn interpolate_crop_results(
 #[cfg(test)]
 mod tests {
     #[test]
-    fn test_area_threshold_calculation() {
-        // Test area threshold calculation logic
-        let frame_width = 1000.0;
-        let frame_height = 1000.0;
-        let frame_area = frame_width * frame_height;
-
-        // Test that 0.01 threshold (1%) works correctly
-        let large_object_area = 100.0 * 100.0; // 10000
-        let large_object_percentage = large_object_area / frame_area; // 0.01 (1%)
-        assert!(large_object_percentage >= 0.01);
-
-        let small_object_area = 20.0 * 20.0; // 400
-        let small_object_percentage = small_object_area / frame_area; // 0.0004 (0.04%)
-        assert!(small_object_percentage < 0.01);
-
-        // Test that ball objects would ignore area threshold
-        let ball_object_name = "ball";
-        let should_ignore_area = ball_object_name == "ball";
-        assert!(should_ignore_area);
-
-        let non_ball_object_name = "face";
-        let should_check_area = non_ball_object_name != "ball";
-        assert!(should_check_area);
-    }
-
-    #[test]
     fn test_combined_hbb_area() {
         use super::combined_hbb_area;
         use usls::Hbb;
@@ -259,6 +285,34 @@ mod tests {
         let expected_area = 100.0 * 50.0 + 25.0 * 25.0; // low-confidence box excluded
 
         assert!((total_area - expected_area).abs() < 1e-3);
+    }
+
+    #[test]
+    fn test_filter_small_relative_objects() {
+        use super::filter_small_relative_objects;
+        use usls::Hbb;
+
+        // One dominant face (294x410) plus two tiny book-cover faces — the exact
+        // shape of the bug1.mp4 frame that split the subject.
+        let main = Hbb::from_xywh(740.0, 170.0, 294.0, 410.0).with_confidence(0.90);
+        let book1 = Hbb::from_xywh(196.0, 726.0, 66.0, 80.0).with_confidence(0.82);
+        let book2 = Hbb::from_xywh(135.0, 730.0, 45.0, 61.0).with_confidence(0.80);
+        let objects: Vec<&Hbb> = vec![&main, &book1, &book2];
+
+        // At the default ratio the two tiny faces (~2-4% of the largest) are
+        // dropped, leaving only the real subject.
+        let kept = filter_small_relative_objects(objects.clone(), "face", 0.05);
+        assert_eq!(kept.len(), 1);
+
+        // A genuine co-subject at similar size is kept (two-person stacked case).
+        let person2 = Hbb::from_xywh(314.0, 250.0, 368.0, 527.0).with_confidence(0.90);
+        let two: Vec<&Hbb> = vec![&main, &person2];
+        assert_eq!(filter_small_relative_objects(two, "face", 0.05).len(), 2);
+
+        // Disabled (ratio 0) and ball-type-exempt paths keep everything.
+        assert_eq!(filter_small_relative_objects(objects.clone(), "face", 0.0).len(), 3);
+        assert_eq!(filter_small_relative_objects(objects.clone(), "ball", 0.05).len(), 3);
+        assert_eq!(filter_small_relative_objects(objects, "sports ball", 0.05).len(), 3);
     }
 
     #[test]
