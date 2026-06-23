@@ -39,6 +39,14 @@ pub struct Args {
     #[argh(option, default = "0.75")]
     pub object_prob_threshold: f32,
 
+    /// minimum object area as a fraction of the LARGEST detected object's area;
+    /// smaller detections (e.g. faces printed on a book cover/poster, or distant
+    /// bystanders) are dropped so they don't inflate the head count and trigger a
+    /// stacked layout that splits the real subject. Default 0.1 (an object must be
+    /// at least ~1/3 the dominant object's height to count). 0 disables; ball is exempt.
+    #[argh(option, default = "0.1")]
+    pub min_area_ratio: f32,
+
     /// cut similarity threshold (default: 0.4)
     #[argh(option, default = "0.4")]
     pub cut_similarity: f64,
