@@ -174,9 +174,9 @@ pub fn extract_objects_above_threshold<'a>(
 ///
 /// An object is kept when its area is at least `min_area_ratio` of the largest
 /// object's area; the largest object is always kept. The ratio is on *area*, so
-/// e.g. `0.1` keeps anything down to ~1/3 the dominant object's linear size — a
-/// genuine co-subject at similar distance (~0.9 ratio) is always kept, while a
-/// face on a book cover (a few percent) is dropped with wide margin.
+/// e.g. the `0.05` default keeps anything down to ~1/5 the dominant object's
+/// linear size — a genuine co-subject at similar distance (~0.9 ratio) is always
+/// kept, while a face on a book cover (a few percent) is dropped with margin.
 ///
 /// This is scale-free (relative to the scene's own largest object), so it
 /// generalizes across resolutions and shot framings without a per-video tweak.
@@ -301,18 +301,18 @@ mod tests {
 
         // At the default ratio the two tiny faces (~2-4% of the largest) are
         // dropped, leaving only the real subject.
-        let kept = filter_small_relative_objects(objects.clone(), "face", 0.1);
+        let kept = filter_small_relative_objects(objects.clone(), "face", 0.05);
         assert_eq!(kept.len(), 1);
 
         // A genuine co-subject at similar size is kept (two-person stacked case).
         let person2 = Hbb::from_xywh(314.0, 250.0, 368.0, 527.0).with_confidence(0.90);
         let two: Vec<&Hbb> = vec![&main, &person2];
-        assert_eq!(filter_small_relative_objects(two, "face", 0.1).len(), 2);
+        assert_eq!(filter_small_relative_objects(two, "face", 0.05).len(), 2);
 
         // Disabled (ratio 0) and ball-type-exempt paths keep everything.
         assert_eq!(filter_small_relative_objects(objects.clone(), "face", 0.0).len(), 3);
-        assert_eq!(filter_small_relative_objects(objects.clone(), "ball", 0.1).len(), 3);
-        assert_eq!(filter_small_relative_objects(objects, "sports ball", 0.1).len(), 3);
+        assert_eq!(filter_small_relative_objects(objects.clone(), "ball", 0.05).len(), 3);
+        assert_eq!(filter_small_relative_objects(objects, "sports ball", 0.05).len(), 3);
     }
 
     #[test]
