@@ -181,22 +181,22 @@ pub fn extract_objects_above_threshold<'a>(
 /// This is scale-free (relative to the scene's own largest object), so it
 /// generalizes across resolutions and shot framings without a per-video tweak.
 ///
-/// `min_area_ratio <= 0` disables the filter. `ball` objects are exempt: the
-/// ball processor selects a single ball itself, and a valid far ball can be
-/// legitimately small. Inputs with fewer than two objects are returned as-is.
+/// `min_area_ratio <= 0` disables the filter. Ball-type objects (`ball`,
+/// `sports ball`) are exempt: a valid ball can be legitimately small relative to
+/// a nearer one, and the dedicated ball path selects a single ball itself.
+/// Inputs with fewer than two objects are returned as-is.
 pub fn filter_small_relative_objects<'a>(
     objects: Vec<&'a Hbb>,
     object_name: &str,
     min_area_ratio: f32,
 ) -> Vec<&'a Hbb> {
-    if min_area_ratio <= 0.0 || object_name == "ball" || objects.len() < 2 {
+    let is_ball_type = object_name == "ball" || object_name == "sports ball";
+    if min_area_ratio <= 0.0 || is_ball_type || objects.len() < 2 {
         return objects;
     }
 
-    let largest_area = objects
-        .iter()
-        .map(|hbb| hbb.width() * hbb.height())
-        .fold(0.0_f32, f32::max);
+    // Use Hbb::area() to match the largest-object selection in crop.rs.
+    let largest_area = objects.iter().map(|hbb| hbb.area()).fold(0.0_f32, f32::max);
     if largest_area <= 0.0 {
         return objects;
     }
@@ -204,7 +204,7 @@ pub fn filter_small_relative_objects<'a>(
     let area_threshold = largest_area * min_area_ratio;
     let kept: Vec<&Hbb> = objects
         .into_iter()
-        .filter(|hbb| hbb.width() * hbb.height() >= area_threshold)
+        .filter(|hbb| hbb.area() >= area_threshold)
         .collect();
 
     debug_println(format_args!(
@@ -309,9 +309,10 @@ mod tests {
         let two: Vec<&Hbb> = vec![&main, &person2];
         assert_eq!(filter_small_relative_objects(two, "face", 0.1).len(), 2);
 
-        // Disabled (ratio 0) and ball-exempt paths keep everything.
+        // Disabled (ratio 0) and ball-type-exempt paths keep everything.
         assert_eq!(filter_small_relative_objects(objects.clone(), "face", 0.0).len(), 3);
-        assert_eq!(filter_small_relative_objects(objects, "ball", 0.1).len(), 3);
+        assert_eq!(filter_small_relative_objects(objects.clone(), "ball", 0.1).len(), 3);
+        assert_eq!(filter_small_relative_objects(objects, "sports ball", 0.1).len(), 3);
     }
 
     #[test]

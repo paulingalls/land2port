@@ -39,11 +39,9 @@ pub struct Args {
     #[argh(option, default = "0.75")]
     pub object_prob_threshold: f32,
 
-    /// minimum object area as a fraction of the LARGEST detected object's area;
-    /// smaller detections (e.g. faces printed on a book cover/poster, or distant
-    /// bystanders) are dropped so they don't inflate the head count and trigger a
-    /// stacked layout that splits the real subject. Default 0.1 (an object must be
-    /// at least ~1/3 the dominant object's height to count). 0 disables; ball is exempt.
+    /// drop detections smaller than this fraction of the largest detection's area
+    /// (default 0.1, ~1/3 its linear size); filters incidental faces (book covers,
+    /// distant bystanders) that would split the subject. 0 disables; balls exempt.
     #[argh(option, default = "0.1")]
     pub min_area_ratio: f32,
 
