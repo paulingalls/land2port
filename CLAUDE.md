@@ -13,7 +13,7 @@ RUST_LOG=debug cargo run --release -- ...   # Debug output
 
 **Prerequisites:** Rust (edition 2024), ffmpeg, `OPENAI_API_KEY` (for `--add-captions`).
 
-**Notable CLI args** (full list in `cli.rs`): `--object` (face/head/ball/person/car/...), `--device` (`cpu:0` default, `cuda:0`, `coreml`, `trt:0`), `--scale` (n/s/m/l), `--ver` (model version), `--output-filepath` (copies final video out of `runs/`), `--add-captions`, `--keep-text`/`--prioritize-text`.
+**Notable CLI args** (full list in `cli.rs`): `--object` (face/head/ball/person/car/...), `--device` (`cpu:0` default, `cuda:0`, `coreml`, `trt:0`), `--scale` (n/s/m/l), `--ver` (model version), `--output-filepath` (copies final video out of `runs/`), `--add-captions`, `--keep-text`/`--prioritize-text`, `--min-area-ratio` (default `0.05`; drops detections smaller than this fraction of the largest detection's area so incidental faces—e.g. on a book cover—don't inflate the object count into a subject-splitting stacked crop; `0` disables, ball-type objects exempt; see `filter_small_relative_objects` in `video_processor_utils.rs`).
 
 ## Architecture
 

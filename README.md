@@ -99,6 +99,7 @@ cargo run --release -- \
 #### Object Detection
 - `--object <TYPE>`: Object type to detect - `face`, `head`, `ball`, `sports ball`, `frisbee`, `person`, `car`, `motorcycle`, `truck`, or `boat` (default: `face`)
 - `--object-prob-threshold <FLOAT>`: Threshold where object gets included in crop logic (default: `0.75`)
+- `--min-area-ratio <FLOAT>`: Drop detections smaller than this fraction of the *largest* detection's area, so incidental objects (e.g. faces printed on a book cover or poster, or distant bystanders) don't inflate the object count and split the real subject across a stacked crop. The default `0.05` keeps anything down to ~1/5 the dominant object's linear size; a genuine co-subject at similar distance is always kept. Set to `0` to disable. Ball-type objects (`ball`, `sports ball`) are exempt. (default: `0.05`)
 
 #### Model Configuration
 - `--device <DEVICE>`: Processing device - `cpu:0`, `cuda:0`, `coreml` (default: `cpu:0`)
