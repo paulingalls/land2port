@@ -98,6 +98,14 @@ pub trait VideoProcessor {
                     &args.object,
                     args.object_prob_threshold
                 );
+                // Drop incidental faces that are tiny relative to the dominant
+                // subject (e.g. faces on a book cover) so they don't inflate the
+                // head count into a stacked layout that splits the real subject.
+                let objects = video_processor_utils::filter_small_relative_objects(
+                    objects,
+                    &args.object,
+                    args.min_area_ratio,
+                );
 
                 let is_graphic =
                     if (objects.len() == 0 && args.keep_text) || args.prioritize_text {

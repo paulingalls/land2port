@@ -39,6 +39,12 @@ pub struct Args {
     #[argh(option, default = "0.75")]
     pub object_prob_threshold: f32,
 
+    /// drop detections smaller than this fraction of the largest detection's area
+    /// (default 0.05, ~1/5 its linear size); filters incidental faces (book covers,
+    /// distant bystanders) that would split the subject. 0 disables; balls exempt.
+    #[argh(option, default = "0.05")]
+    pub min_area_ratio: f32,
+
     /// cut similarity threshold (default: 0.4)
     #[argh(option, default = "0.4")]
     pub cut_similarity: f64,
