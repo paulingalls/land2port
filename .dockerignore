@@ -1,0 +1,18 @@
+# Keep the docker build context small. The image build only needs Cargo.toml,
+# Cargo.lock, build.rs, src/, and deploy/entrypoint.sh (see deploy/Dockerfile.gcloud);
+# ONNX weights are downloaded at runtime, not baked in.
+.git
+target
+runs
+video
+model
+model-backup
+bench
+docs
+.idea
+.vscode
+.DS_Store
+*.mp4
+*.mov
+*.webm
+*.7z

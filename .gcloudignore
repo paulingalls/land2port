@@ -1,9 +1,14 @@
 # Keep the Cloud Build upload context small. The image only needs the source,
-# Cargo manifests, build.rs, the model/ ONNX files, and deploy/.
+# Cargo manifests, build.rs, and deploy/ — ONNX weights are downloaded at runtime.
 .git/
 target/
 runs/
 video/
-bench/results/
-bench/.cuda-venv/
+model/
+model-backup/
+bench/
+docs/
+*.mp4
+*.mov
+*.webm
 *.7z
