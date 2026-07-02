@@ -77,8 +77,11 @@ ENV LD_LIBRARY_PATH="/usr/lib:${LD_LIBRARY_PATH}"
 # Fixed temp dir for runs (avoids cwd-dependent paths in Cloud Run)
 ENV LAND2PORT_RUNS_DIR=/app/runs
 
-# Copy ONNX model files
-COPY model/ ./model/
+# ONNX weights are no longer baked into the image — they are downloaded and
+# cached on first use by usls's Hub (see src/config.rs). They land in
+# ~/.cache/usls on local disk; only the TensorRT engine cache is persisted to
+# GCS by entrypoint.sh, so weights re-download per execution (small vs. the
+# TensorRT build). To pin an offline copy instead, mount weights at ./model/.
 
 COPY deploy/entrypoint.sh ./entrypoint.sh
 RUN sed -i 's/\r$//' entrypoint.sh && chmod +x entrypoint.sh

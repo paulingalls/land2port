@@ -1,8 +1,11 @@
 /target
 /usls
+# Model weights are downloaded/cached at runtime (see src/config.rs), not vendored.
+/model/
 /runs/
 /video/
 /runs/*.mov
 .DS_Store
 /bench/results/
 /bench/.cuda-venv/
+/model-backup/

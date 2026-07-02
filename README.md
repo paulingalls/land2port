@@ -49,10 +49,16 @@ Download from [ffmpeg.org](https://ffmpeg.org/download.html)
 ### Build from Source
 
 ```bash
-git clone https://github.com/yourusername/land2port.git
+git clone https://github.com/paulingalls/land2port.git
 cd land2port
 cargo build --release
 ```
+
+Model weights are **not** vendored in this repo. On first use, the required
+ONNX model is downloaded automatically and cached (in the usls cache dir, e.g.
+`~/Library/Caches/usls` on macOS or `~/.cache/usls` on Linux). To run fully
+offline, drop matching `.onnx` files under `./model/` — a local file at that
+path takes precedence over the download. See [Model weights & licensing](#model-weights--licensing).
 
 ## Usage
 
@@ -452,7 +458,17 @@ Contributions are welcome! Please feel free to submit a Pull Request. For major 
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project's **source code** is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+### Model weights & licensing
+
+The MIT license covers this code **only**. The YOLO model weights are downloaded
+at runtime from third-party sources and remain under their own licenses — mostly
+**AGPL-3.0** (Ultralytics-derived face/head/football models) and **GPL-3.0**
+(YOLOv6 face). These copyleft terms can extend to applications and network
+services built around the weights; commercial use of the Ultralytics-derived
+models without releasing your app under AGPL requires an Ultralytics Enterprise
+License. Full attribution and per-model licenses are in [NOTICE.md](NOTICE.md).
 
 ## Acknowledgments
 

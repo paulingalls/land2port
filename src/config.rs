@@ -2,8 +2,24 @@ use crate::cli::Args;
 use anyhow::Result;
 use usls::{Config, NAMES_COCO_80, Task};
 
-/// Determines the model file path based on object type, version, and scale
+/// Determines the model reference for a given object type, version, and scale.
+///
+/// These are not local paths but references that usls's `Hub` resolves and
+/// caches on first use (the usls cache dir, e.g. `~/.cache/usls` on Linux or
+/// `~/Library/Caches/usls` on macOS), so the weights don't have to be
+/// vendored into this (MIT-licensed) repository. A local file at the same path
+/// still takes precedence if present, so an offline `./model/…` copy keeps working.
+///
+/// Sources (all weights remain under their upstream AGPL/GPL licenses — see NOTICE):
+/// - **face** → Hugging Face `deepghs/yolo-face` (ONNX exports of akanametov/yolo-face)
+/// - **head** → `jamjamjon/assets` GitHub release (usls's default hub, tag `yolo`)
+/// - **ball** → a GitHub release on this repo (no public source exists for these)
 fn get_model_path(object: &str, ver: f32, scale: &str) -> String {
+    // GitHub release hosting this repo's football weights, which have no upstream
+    // public download. Keep the tag in sync with the release assets.
+    const BALL_RELEASE: &str =
+        "https://github.com/paulingalls/land2port/releases/download/models-v1";
+
     match object {
         "face" => {
             // Check if version and scale are supported for faces
@@ -11,18 +27,18 @@ fn get_model_path(object: &str, ver: f32, scale: &str) -> String {
             let supported_scales = ["n", "s", "m", "l"];
 
             if supported_versions.contains(&ver) && supported_scales.contains(&scale) {
-                format!("./model/yolov{}{}-face.onnx", ver as i32, scale)
+                format!("deepghs/yolo-face/yolov{}{}-face/model.onnx", ver as i32, scale)
             } else {
-                // Default to yolov8m-face.onnx if unsupported combination
-                "./model/yolov8m-face.onnx".to_string()
+                // Default to yolov8m-face if unsupported combination
+                "deepghs/yolo-face/yolov8m-face/model.onnx".to_string()
             }
         }
-        "head" => "./model/v8-head-fp16.onnx".to_string(),
+        "head" => "yolo/v8-head-fp16.onnx".to_string(),
         "ball" => {
             match scale {
-                "m" => "./model/yolov8m-football.onnx".to_string(),
-                "n" => "./model/yolov8n-football.onnx".to_string(),
-                _ => "./model/yolov8n-football.onnx".to_string(), // Default to n scale
+                "m" => format!("{BALL_RELEASE}/yolov8m-football.onnx"),
+                "n" => format!("{BALL_RELEASE}/yolov8n-football.onnx"),
+                _ => format!("{BALL_RELEASE}/yolov8n-football.onnx"), // Default to n scale
             }
         }
         _ => "".to_string(), // Empty string for other object types
@@ -68,45 +84,42 @@ mod tests {
         // Test faces with different versions and scales
         assert_eq!(
             get_model_path("face", 8.0, "m"),
-            "./model/yolov8m-face.onnx"
+            "deepghs/yolo-face/yolov8m-face/model.onnx"
         );
         assert_eq!(
             get_model_path("face", 10.0, "s"),
-            "./model/yolov10s-face.onnx"
+            "deepghs/yolo-face/yolov10s-face/model.onnx"
         );
         assert_eq!(
             get_model_path("face", 11.0, "l"),
-            "./model/yolov11l-face.onnx"
+            "deepghs/yolo-face/yolov11l-face/model.onnx"
         );
         assert_eq!(
             get_model_path("face", 6.0, "n"),
-            "./model/yolov6n-face.onnx"
+            "deepghs/yolo-face/yolov6n-face/model.onnx"
         );
 
-        // Test unsupported combination defaults to yolov8m-face.onnx
+        // Test unsupported combination defaults to yolov8m-face
         assert_eq!(
             get_model_path("face", 9.0, "m"),
-            "./model/yolov8m-face.onnx"
+            "deepghs/yolo-face/yolov8m-face/model.onnx"
         );
         assert_eq!(
             get_model_path("face", 8.0, "x"),
-            "./model/yolov8m-face.onnx"
+            "deepghs/yolo-face/yolov8m-face/model.onnx"
         );
 
-        // Test heads
-        assert_eq!(
-            get_model_path("head", 8.0, "m"),
-            "./model/v8-head-fp16.onnx"
-        );
+        // Test heads (usls default hub: jamjamjon/assets, tag `yolo`)
+        assert_eq!(get_model_path("head", 8.0, "m"), "yolo/v8-head-fp16.onnx");
 
-        // Test football
+        // Test football (GitHub release on this repo)
         assert_eq!(
             get_model_path("ball", 8.0, "m"),
-            "./model/yolov8m-football.onnx"
+            "https://github.com/paulingalls/land2port/releases/download/models-v1/yolov8m-football.onnx"
         );
         assert_eq!(
             get_model_path("ball", 8.0, "n"),
-            "./model/yolov8n-football.onnx"
+            "https://github.com/paulingalls/land2port/releases/download/models-v1/yolov8n-football.onnx"
         );
 
         // Test other object types
