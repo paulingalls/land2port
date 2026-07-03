@@ -7,7 +7,7 @@ usage() {
     echo "Executes the land2port Cloud Run job on a video already uploaded to GCS."
     echo ""
     echo "Options:"
-    echo "  --object <type>           Object type: face, head, ball, person, car, etc. (default: face)"
+    echo "  --object <type>           Object type: face, head, person, car, etc. (default: face)"
     echo "  --scale <s>               Model scale: n, s, m, l (default: s)"
     echo "  --ver <v>                 Model version: 6, 8, 10, 11 (default: 11)"
     echo "  --smooth-percentage <f>   Smooth percentage threshold (default: 7.5)"

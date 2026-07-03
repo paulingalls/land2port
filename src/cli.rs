@@ -3,7 +3,7 @@ use argh::FromArgs;
 /// YOLO Example
 #[derive(FromArgs, Debug)]
 pub struct Args {
-    /// object type: face, head, ball, sports ball, frisbee, person, car, truck, or boat
+    /// object type: face, head, sports ball, frisbee, person, car, truck, or boat
     #[argh(option, default = "String::from(\"face\")")]
     pub object: String,
 
@@ -41,7 +41,7 @@ pub struct Args {
 
     /// drop detections smaller than this fraction of the largest detection's area
     /// (default 0.05, ~1/5 its linear size); filters incidental faces (book covers,
-    /// distant bystanders) that would split the subject. 0 disables; balls exempt.
+    /// distant bystanders) that would split the subject. 0 disables; sports balls exempt.
     #[argh(option, default = "0.05")]
     pub min_area_ratio: f32,
 

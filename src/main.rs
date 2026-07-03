@@ -7,7 +7,6 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 mod audio;
-mod ball_video_processor;
 mod cli;
 mod config;
 mod crop;
@@ -209,10 +208,7 @@ async fn main() -> Result<()> {
 
     // Choose processor based on object type and smoothing preference
     metrics::time("process_video", || -> Result<()> {
-        if args.object == "ball" {
-            let mut processor = ball_video_processor::BallVideoProcessor::new(&args);
-            processor.process_video(&args, &processed_video)
-        } else if args.use_simple_smoothing {
+        if args.use_simple_smoothing {
             let mut processor =
                 simple_smoothing_video_processor::SimpleSmoothingVideoProcessor::new();
             processor.process_video(&args, &processed_video)

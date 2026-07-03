@@ -13,13 +13,7 @@ use usls::{Config, NAMES_COCO_80, Task};
 /// Sources (all weights remain under their upstream AGPL/GPL licenses — see NOTICE):
 /// - **face** → Hugging Face `deepghs/yolo-face` (ONNX exports of akanametov/yolo-face)
 /// - **head** → `jamjamjon/assets` GitHub release (usls's default hub, tag `yolo`)
-/// - **ball** → a GitHub release on this repo (no public source exists for these)
 fn get_model_path(object: &str, ver: f32, scale: &str) -> String {
-    // GitHub release hosting this repo's football weights, which have no upstream
-    // public download. Keep the tag in sync with the release assets.
-    const BALL_RELEASE: &str =
-        "https://github.com/paulingalls/land2port/releases/download/models-v1";
-
     match object {
         "face" => {
             // Check if version and scale are supported for faces
@@ -34,13 +28,6 @@ fn get_model_path(object: &str, ver: f32, scale: &str) -> String {
             }
         }
         "head" => "yolo/v8-head-fp16.onnx".to_string(),
-        "ball" => {
-            match scale {
-                "m" => format!("{BALL_RELEASE}/yolov8m-football.onnx"),
-                "n" => format!("{BALL_RELEASE}/yolov8n-football.onnx"),
-                _ => format!("{BALL_RELEASE}/yolov8n-football.onnx"), // Default to n scale
-            }
-        }
         _ => "".to_string(), // Empty string for other object types
     }
 }
@@ -112,17 +99,7 @@ mod tests {
         // Test heads (usls default hub: jamjamjon/assets, tag `yolo`)
         assert_eq!(get_model_path("head", 8.0, "m"), "yolo/v8-head-fp16.onnx");
 
-        // Test football (GitHub release on this repo)
-        assert_eq!(
-            get_model_path("ball", 8.0, "m"),
-            "https://github.com/paulingalls/land2port/releases/download/models-v1/yolov8m-football.onnx"
-        );
-        assert_eq!(
-            get_model_path("ball", 8.0, "n"),
-            "https://github.com/paulingalls/land2port/releases/download/models-v1/yolov8n-football.onnx"
-        );
-
-        // Test other object types
+        // Test other object types (COCO passthrough / no dedicated model)
         assert_eq!(get_model_path("person", 8.0, "m"), "");
         assert_eq!(get_model_path("car", 8.0, "m"), "");
         assert_eq!(get_model_path("sports ball", 8.0, "m"), "");

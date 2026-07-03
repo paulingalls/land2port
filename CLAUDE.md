@@ -13,7 +13,7 @@ RUST_LOG=debug cargo run --release -- ...   # Debug output
 
 **Prerequisites:** Rust (edition 2024), ffmpeg, `OPENAI_API_KEY` (for `--add-captions`).
 
-**Notable CLI args** (full list in `cli.rs`): `--object` (face/head/ball/person/car/...), `--device` (`cpu:0` default, `cuda:0`, `coreml`, `trt:0`), `--scale` (n/s/m/l), `--ver` (model version), `--output-filepath` (copies final video out of `runs/`), `--add-captions`, `--keep-text`/`--prioritize-text`, `--min-area-ratio` (default `0.05`; drops detections smaller than this fraction of the largest detection's area so incidental faces—e.g. on a book cover—don't inflate the object count into a subject-splitting stacked crop; `0` disables, ball-type objects exempt; see `filter_small_relative_objects` in `video_processor_utils.rs`).
+**Notable CLI args** (full list in `cli.rs`): `--object` (face/head/person/car/...), `--device` (`cpu:0` default, `cuda:0`, `coreml`, `trt:0`), `--scale` (n/s/m/l), `--ver` (model version), `--output-filepath` (copies final video out of `runs/`), `--add-captions`, `--keep-text`/`--prioritize-text`, `--min-area-ratio` (default `0.05`; drops detections smaller than this fraction of the largest detection's area so incidental faces—e.g. on a book cover—don't inflate the object count into a subject-splitting stacked crop; `0` disables, `sports ball` exempt; see `filter_small_relative_objects` in `video_processor_utils.rs`).
 
 ## Architecture
 
@@ -21,14 +21,13 @@ Landscape-to-portrait (9:16) video converter: YOLO object detection → crop cal
 
 **Pipeline:** `main.rs` → `cli.rs` → `config.rs` → VideoProcessor loop (`crop.rs` + smoothing) → optional audio/captions (`audio.rs`, `transcript.rs`).
 
-**Three VideoProcessor implementations** (strategy pattern, trait in `video_processor.rs`):
+**Two VideoProcessor implementations** (strategy pattern, trait in `video_processor.rs`):
 - `HistorySmoothingVideoProcessor` — default, history-based interpolation
 - `SimpleSmoothingVideoProcessor` — `--use-simple-smoothing`, previous-frame-only comparison
-- `BallVideoProcessor` — auto-selected for `--object ball`, 3-frame prediction
 
 **`crop.rs`** is the most complex module (~500 lines). Logic branches by object count: 0→centered 3:4, 1→centered on object, 2→single or stacked 9:8, 3→special 9:6+9:10 stacking for equally-spaced heads, 6+→largest object.
 
-**Key modules:** `image.rs` (cut detection via image similarity), `history.rs` (frame/crop history), `video_processor_utils.rs` (shared helpers), `video_sink.rs` (output encoding + fps probe), `config.rs` (maps CLI args to remote model references resolved+cached at runtime by usls's `Hub` — face → HF `deepghs/yolo-face`, head → `jamjamjon/assets` default hub, ball/football → a GitHub release on this repo; weights are no longer vendored so the code can be MIT-licensed, see `NOTICE.md`. A local `./model/<file>.onnx` still wins if present).
+**Key modules:** `image.rs` (cut detection via image similarity), `history.rs` (frame/crop history), `video_processor_utils.rs` (shared helpers), `video_sink.rs` (output encoding + fps probe), `config.rs` (maps CLI args to remote model references resolved+cached at runtime by usls's `Hub` — face → HF `deepghs/yolo-face`, head → `jamjamjon/assets` default hub; weights are no longer vendored so the code can be MIT-licensed, see `NOTICE.md`. A local `./model/<file>.onnx` still wins if present).
 
 **Output encoding (`video_sink.rs`):** The usls `Viewer` auto-generates output paths and has no save-path API, so `VideoSink` drives a `video-rs` `Encoder` directly to write the cropped frames to the exact `processed_video.mp4` path `main.rs` expects (and later copies to `--output-filepath`). The usls `DataLoader` no longer exposes the source frame rate, so `probe_fps` shells out to `ffprobe` (falls back to 30 fps); this fps drives both smoothing math and output frame timing.
 

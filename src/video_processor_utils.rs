@@ -80,49 +80,6 @@ where
     total_area >= frame_area * graphic_threshold
 }
 
-/// Predicts the current HBB position based on the previous three frames
-/// Uses velocity and acceleration to estimate where the object will be in the current frame
-///
-/// # Arguments
-/// * `three_frames_ago` - The HBB from three frames ago
-/// * `two_frames_ago` - The HBB from two frames ago
-/// * `last_frame` - The HBB from the last frame
-/// * `max_x` - Maximum x coordinate (width of frame)
-/// * `max_y` - Maximum y coordinate (height of frame)
-///
-/// # Returns
-/// A predicted HBB for the current frame
-pub fn predict_current_hbb(
-    three_frames_ago: &Hbb,
-    two_frames_ago: &Hbb,
-    last_frame: &Hbb,
-    max_x: f32,
-    max_y: f32,
-) -> Hbb {
-    // Calculate velocities between consecutive frames
-    let v1_x = two_frames_ago.xmin() - three_frames_ago.xmin();
-    let v1_y = two_frames_ago.ymin() - three_frames_ago.ymin();
-    let v2_x = last_frame.xmin() - two_frames_ago.xmin();
-    let v2_y = last_frame.ymin() - two_frames_ago.ymin();
-
-    // Calculate acceleration (change in velocity)
-    let ax = v2_x - v1_x;
-    let ay = v2_y - v1_y;
-
-    // Predict current position using velocity + acceleration
-    // Position = last_position + velocity + 0.5 * acceleration
-    let predicted_x = last_frame.xmin() + v2_x + 0.5 * ax;
-    let predicted_y = last_frame.ymin() + v2_y + 0.5 * ay;
-
-    // Create a new HBB with the predicted values using center coordinates
-    Hbb::from_xywh(
-        predicted_x.max(0.0).min(max_x),
-        predicted_y.max(0.0).min(max_y),
-        last_frame.width(),
-        last_frame.height(),
-    )
-}
-
 /// Prints the default debug information for video processors
 pub fn print_default_debug_info(
     objects: &[&usls::Hbb],
@@ -181,16 +138,15 @@ pub fn extract_objects_above_threshold<'a>(
 /// This is scale-free (relative to the scene's own largest object), so it
 /// generalizes across resolutions and shot framings without a per-video tweak.
 ///
-/// `min_area_ratio <= 0` disables the filter. Ball-type objects (`ball`,
-/// `sports ball`) are exempt: a valid ball can be legitimately small relative to
-/// a nearer one, and the dedicated ball path selects a single ball itself.
+/// `min_area_ratio <= 0` disables the filter. `sports ball` objects are exempt:
+/// a valid ball can be legitimately small relative to a nearer one.
 /// Inputs with fewer than two objects are returned as-is.
 pub fn filter_small_relative_objects<'a>(
     objects: Vec<&'a Hbb>,
     object_name: &str,
     min_area_ratio: f32,
 ) -> Vec<&'a Hbb> {
-    let is_ball_type = object_name == "ball" || object_name == "sports ball";
+    let is_ball_type = object_name == "sports ball";
     if min_area_ratio <= 0.0 || is_ball_type || objects.len() < 2 {
         return objects;
     }
@@ -309,9 +265,8 @@ mod tests {
         let two: Vec<&Hbb> = vec![&main, &person2];
         assert_eq!(filter_small_relative_objects(two, "face", 0.05).len(), 2);
 
-        // Disabled (ratio 0) and ball-type-exempt paths keep everything.
+        // Disabled (ratio 0) and the `sports ball` exemption keep everything.
         assert_eq!(filter_small_relative_objects(objects.clone(), "face", 0.0).len(), 3);
-        assert_eq!(filter_small_relative_objects(objects.clone(), "ball", 0.05).len(), 3);
         assert_eq!(filter_small_relative_objects(objects, "sports ball", 0.05).len(), 3);
     }
 

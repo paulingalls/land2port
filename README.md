@@ -4,7 +4,7 @@ A powerful video processing tool that automatically detects objects like faces o
 
 ## Features
 
-- **🎯 Object Detection**: Uses YOLO models to detect faces, heads, footballs, sports balls, frisbees, persons, cars, motorcycles, trucks, or boats in video frames with high accuracy
+- **🎯 Object Detection**: Uses YOLO models to detect faces, heads, sports balls, frisbees, persons, cars, motorcycles, trucks, or boats in video frames with high accuracy
 - **📱 Portrait Cropping**: Automatically crops videos to 9:16 aspect ratio for mobile viewing
 - **🎬 Smart Cropping Logic**: 
   - Single object: Centers crop on the detected object
@@ -18,7 +18,6 @@ A powerful video processing tool that automatically detects objects like faces o
 - **🎥 Cut Detection**: Intelligent scene cut detection to optimize processing
 - **🖼️ Text Preservation**: Optional preservation of text elements using PaddleOCR model text detection
 - **🎯 Specialized Processors**: Multiple video processing strategies:
-  - **Ball Video Processor**: Optimized for tracking fast-moving objects like footballs with prediction algorithms
   - **History Smoothing Processor**: Advanced smoothing using crop history and interpolation
   - **Simple Smoothing Processor**: Fast processing with basic smoothing for performance
 
@@ -103,9 +102,9 @@ cargo run --release -- \
 - `--output-filepath <FILE>`: Output filepath for the final video (default: empty string, video stays in timestamped output directory)
 
 #### Object Detection
-- `--object <TYPE>`: Object type to detect - `face`, `head`, `ball`, `sports ball`, `frisbee`, `person`, `car`, `motorcycle`, `truck`, or `boat` (default: `face`)
+- `--object <TYPE>`: Object type to detect - `face`, `head`, `sports ball`, `frisbee`, `person`, `car`, `motorcycle`, `truck`, or `boat` (default: `face`)
 - `--object-prob-threshold <FLOAT>`: Threshold where object gets included in crop logic (default: `0.75`)
-- `--min-area-ratio <FLOAT>`: Drop detections smaller than this fraction of the *largest* detection's area, so incidental objects (e.g. faces printed on a book cover or poster, or distant bystanders) don't inflate the object count and split the real subject across a stacked crop. The default `0.05` keeps anything down to ~1/5 the dominant object's linear size; a genuine co-subject at similar distance is always kept. Set to `0` to disable. Ball-type objects (`ball`, `sports ball`) are exempt. (default: `0.05`)
+- `--min-area-ratio <FLOAT>`: Drop detections smaller than this fraction of the *largest* detection's area, so incidental objects (e.g. faces printed on a book cover or poster, or distant bystanders) don't inflate the object count and split the real subject across a stacked crop. The default `0.05` keeps anything down to ~1/5 the dominant object's linear size; a genuine co-subject at similar distance is always kept. Set to `0` to disable. `sports ball` objects are exempt. (default: `0.05`)
 
 #### Model Configuration
 - `--device <DEVICE>`: Processing device - `cpu:0`, `cuda:0`, `coreml` (default: `cpu:0`)
@@ -141,7 +140,6 @@ Use the `--object` param to select which type of object to detect. Current optio
 - **face**: Detects faces
 - **head**: Detects heads
 - **person**: Detects people
-- **ball**: Detects footballs (soccer balls)
 - **sports ball**: Detects sport balls
 - **frisbee**: Detects frisbees
 - **car**: Detects cars
@@ -192,12 +190,6 @@ The tool includes sophisticated logic for handling 3-head scenarios:
 
 ### 6. Video Processing Strategies
 The tool automatically selects the appropriate processor based on the object type and user preferences:
-
-- **Ball Video Processor** (for `--object ball`):
-  - Specialized for tracking fast-moving objects like footballs
-  - Uses 3-frame prediction algorithm to anticipate ball position
-  - Implements cut detection to reset tracking on scene changes
-  - Optimized for sports content with rapid movement
 
 - **History Smoothing Processor** (default for most objects):
   - Maintains crop history for intelligent smoothing
@@ -265,10 +257,6 @@ The tool automatically selects the appropriate model based on the `--object`, `-
 #### Head Detection Models
 - `v8-head-fp16.onnx` (v8 head detection)
 
-#### Football Detection Models
-- `yolov8n-football.onnx` (v8 nano)
-- `yolov8m-football.onnx` (v8 medium)
-
 #### Other Objects
 For other objects like `person`, `car`, `motorcycle`, `truck`, `boat`, `sports ball`, `frisbee`, the tool uses the standard COCO-80 YOLO model with class filtering.
 
@@ -321,18 +309,6 @@ cargo run --release -- \
   --device cuda:0 \
   --headless
 ```
-
-### Detect football/soccer balls (uses specialized ball processor)
-```bash
-cargo run --release -- \
-  --object ball \
-  --ver 8.0 \
-  --scale n \
-  --source football_match.mp4 \
-  --headless
-```
-
-**Note**: The ball processor automatically uses 3-frame prediction and cut detection for optimal tracking of fast-moving objects.
 
 ### Detect heads instead of faces
 ```bash
@@ -409,7 +385,6 @@ cargo run --release -- \
 - **Smoothing Strategy**: 
   - Use `--use-simple-smoothing` for fastest processing with basic smoothing
   - Use history smoothing (default) for best quality with smooth transitions
-  - Ball processor automatically optimizes for sports content
 - **Cut Detection**: Adjust `--cut-similarity` and `--cut-start` thresholds for your video content
 - **Text Processing**: Use `--keep-text` for presentations, `--prioritize-text` for mixed content
 
@@ -464,7 +439,7 @@ This project's **source code** is licensed under the MIT License - see the [LICE
 
 The MIT license covers this code **only**. The YOLO model weights are downloaded
 at runtime from third-party sources and remain under their own licenses — mostly
-**AGPL-3.0** (Ultralytics-derived face/head/football models) and **GPL-3.0**
+**AGPL-3.0** (Ultralytics-derived face/head models) and **GPL-3.0**
 (YOLOv6 face). These copyleft terms can extend to applications and network
 services built around the weights; commercial use of the Ultralytics-derived
 models without releasing your app under AGPL requires an Ultralytics Enterprise
@@ -476,7 +451,6 @@ License. Full attribution and per-model licenses are in [NOTICE.md](NOTICE.md).
 - [OpenAI Whisper](https://openai.com/research/whisper) - Speech recognition
 - [YOLO](https://github.com/ultralytics/ultralytics) - Object detection models
 - [YOLO-Face](https://github.com/akanametov/yolo-face) - Yolo Face detection
-- [YOLO-Football](https://github.com/noorkhokhar99/YOLOv8-football) - Yolo for football (soccer)
 
 ## Support
 
