@@ -8,7 +8,7 @@ anyhow = { version = "1" }
 argh = "0.1.13"
 # Upstream usls, pinned. Device features (coreml/cuda/tensorrt) are added
 # per-platform below so macOS doesn't pull the CUDA/TensorRT ORT providers.
-usls = { git = "https://github.com/jamjamjon/usls", rev = "67a07a0f85c69b16acdbc9ae76388d5ff2c3b7b3", features = ["video", "viewer"] }
+usls = { git = "https://github.com/paulingalls/usls", rev = "882cf48b31dabf43a63a5b463607c79652ac384c", features = ["video", "viewer"] }
 image = "0.25"
 image-compare = "0.4.2"
 # SIMD-accelerated resize (AVX2 on x86, NEON on Apple Silicon) for the crop
@@ -24,7 +24,7 @@ slsl = { version = "0.0.5", features = ["rayon"] }
 video-rs = { version = "0.11.0", features = ["ndarray"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-usls = { git = "https://github.com/jamjamjon/usls", rev = "67a07a0f85c69b16acdbc9ae76388d5ff2c3b7b3", features = ["coreml"] }
+usls = { git = "https://github.com/paulingalls/usls", rev = "882cf48b31dabf43a63a5b463607c79652ac384c", features = ["coreml"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-usls = { git = "https://github.com/jamjamjon/usls", rev = "67a07a0f85c69b16acdbc9ae76388d5ff2c3b7b3", features = ["cuda", "tensorrt"] }
+usls = { git = "https://github.com/paulingalls/usls", rev = "882cf48b31dabf43a63a5b463607c79652ac384c", features = ["cuda", "tensorrt"] }

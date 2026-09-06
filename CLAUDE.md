@@ -27,6 +27,8 @@ Landscape-to-portrait (9:16) video converter: YOLO object detection → crop cal
 
 **`crop.rs`** is the most complex module (~500 lines). Logic branches by object count: 0→centered 3:4, 1→centered on object, 2→single or stacked 9:8, 3→special 9:6+9:10 stacking for equally-spaced heads, 6+→largest object.
 
+**CoreML note (`config.rs`):** the hub face ONNX has symbolic input dims; without pinning them (`with_model_dimension_overrides` batch=1/height=640/width=640) ORT's CoreML EP rejects the whole graph and silently runs on CPU (5-10x slower, GPU/ANE idle). The face path also sets CoreML model format `1` (NeuralNetwork) because ORT 1.24's MLProgram path mis-partitions the graph (`Feature ..._attn_Gather_2_output_0 is required but not specified`). The head model is static (800x800) and needs neither.
+
 **Key modules:** `image.rs` (cut detection via image similarity), `history.rs` (frame/crop history), `video_processor_utils.rs` (shared helpers), `video_sink.rs` (output encoding + fps probe), `config.rs` (maps CLI args to remote model references resolved+cached at runtime by usls's `Hub` — face → HF `deepghs/yolo-face`, head → `jamjamjon/assets` default hub; weights are no longer vendored so the code can be MIT-licensed, see `NOTICE.md`. A local `./model/<file>.onnx` still wins if present).
 
 **Output encoding (`video_sink.rs`):** The usls `Viewer` auto-generates output paths and has no save-path API, so `VideoSink` drives a `video-rs` `Encoder` directly to write the cropped frames to the exact `processed_video.mp4` path `main.rs` expects (and later copies to `--output-filepath`). The usls `DataLoader` no longer exposes the source frame rate, so `probe_fps` shells out to `ffprobe` (falls back to 30 fps); this fps drives both smoothing math and output frame timing.
@@ -34,7 +36,7 @@ Landscape-to-portrait (9:16) video converter: YOLO object detection → crop cal
 ## Build Notes
 
 - `build.rs` sets macOS `-fapple-link-rtlib` linker flag
-- `usls` from upstream `jamjamjon/usls` (pinned rev), `video`+`viewer` features; **device features are platform-gated** in `Cargo.toml` via `[target.'cfg(...)']` — `coreml` on macOS, `cuda`+`tensorrt` on Linux (so the Docker/Cloud Run build needs no Cargo.toml patching)
+- `usls` from the fork `paulingalls/usls`, branch `land2port` (pinned rev = upstream `67a07a0` + one commit adding `with_model_dimension_overrides`, also on the fork's `dimension-overrides` branch atop upstream main for a PR). `video`+`viewer` features; **device features are platform-gated** in `Cargo.toml` via `[target.'cfg(...)']` — `coreml` on macOS, `cuda`+`tensorrt` on Linux (so the Docker/Cloud Run build needs no Cargo.toml patching)
 - `video-rs` 0.11.0 from crates.io (used directly for output encoding; no `[patch.crates-io]`)
 - `ffmpeg-next` may need pinning to match the locally installed ffmpeg (e.g. `cargo update -p ffmpeg-next --precise 8.1.0` for system ffmpeg 8.1.x), else its non-exhaustive enum matches fail to compile
 - Output goes to `runs/YYYYMMDD_HHMMSS_ffffff/`

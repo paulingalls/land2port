@@ -45,6 +45,22 @@ pub fn build_config(args: &Args) -> Result<Config> {
         .with_model_device(args.device.parse()?)
         .with_model_num_dry_run(2);
 
+    // The hub face exports (deepghs/yolo-face) have fully symbolic input dims
+    // (`[batch, 3, height, width]`). Execution providers that require static
+    // shapes (CoreML) reject every node of such a graph and ORT silently runs
+    // the whole model on CPU (~5-10x slower). Pin the free dims to the 640x640
+    // letterbox usls feeds so the graph is static and CoreML can take it.
+    //
+    // CoreML model format 1 = NeuralNetwork. With the default MLProgram format
+    // ORT (1.24) mis-partitions this graph's Shape->Gather attention subgraph
+    // and fails at run time with "Feature ..._attn_Gather_2_output_0 is
+    // required but not specified"; NeuralNetwork runs it fine (~18 ms/frame).
+    if args.object == "face" {
+        config = config
+            .with_model_dimension_overrides(&[("batch", 1), ("height", 640), ("width", 640)])
+            .with_model_coreml_model_format(1);
+    }
+
     if model_path.is_empty() {
         config = config.with_class_names(&NAMES_COCO_80);
         config = match args.object.as_str() {
