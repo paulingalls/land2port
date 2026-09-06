@@ -3309,7 +3309,7 @@ dependencies = [
 [[package]]
 name = "usls"
 version = "0.2.0-alpha.4"
-source = "git+https://github.com/paulingalls/usls?rev=882cf48b31dabf43a63a5b463607c79652ac384c#882cf48b31dabf43a63a5b463607c79652ac384c"
+source = "git+https://github.com/paulingalls/usls?rev=eb417b335e7c4f96cc40623716b0400da037279d#eb417b335e7c4f96cc40623716b0400da037279d"
 dependencies = [
  "ab_glyph",
  "aksr",

@@ -36,7 +36,7 @@ Landscape-to-portrait (9:16) video converter: YOLO object detection → crop cal
 ## Build Notes
 
 - `build.rs` sets macOS `-fapple-link-rtlib` linker flag
-- `usls` from the fork `paulingalls/usls`, branch `land2port` (pinned rev = upstream `67a07a0` + one commit adding `with_model_dimension_overrides`, also on the fork's `dimension-overrides` branch atop upstream main for a PR). `video`+`viewer` features; **device features are platform-gated** in `Cargo.toml` via `[target.'cfg(...)']` — `coreml` on macOS, `cuda`+`tensorrt` on Linux (so the Docker/Cloud Run build needs no Cargo.toml patching)
+- `usls` from the fork `paulingalls/usls`, branch `land2port` (pinned rev = upstream `338eb89` (last commit before the ort rc.13 / CUDA-13-only bump) + one commit adding `with_model_dimension_overrides`, also on the fork's `dimension-overrides` branch atop upstream main for a PR). `video`+`viewer` features; **device features are platform-gated** in `Cargo.toml` via `[target.'cfg(...)']` — `coreml` on macOS, `cuda`+`tensorrt` on Linux (so the Docker/Cloud Run build needs no Cargo.toml patching)
 - `video-rs` 0.11.0 from crates.io (used directly for output encoding; no `[patch.crates-io]`)
 - `ffmpeg-next` may need pinning to match the locally installed ffmpeg (e.g. `cargo update -p ffmpeg-next --precise 8.1.0` for system ffmpeg 8.1.x), else its non-exhaustive enum matches fail to compile
 - Output goes to `runs/YYYYMMDD_HHMMSS_ffffff/`
